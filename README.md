@@ -40,7 +40,7 @@ Because Inbox Mover is a standalone script, "installing" it just means placing i
 
 3. **Suggested Location (Linux):** You can place it in your ```~/Desktop directory``` or in a shared location like ```/opt/InboxMover``` if multiple users need access.
 
-Note: The application will automatically create a ```permit_configs``` folder in the same directory as the script to save your settings.
+*Note: The application will automatically create a ```permit_configs``` folder in the same directory as the script to save your settings.*
 
 ## 🖱️ How to Use (GUI Mode)
 
