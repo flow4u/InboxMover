@@ -414,9 +414,15 @@ class InboxMoverGUI:
         self.lbl_permit_id = ttk.Label(info_frame, textvariable=self.permit_id_var)
         self.lbl_permit_id.pack(anchor=tk.W)
 
-        # Config Save
-        self.btn_save_config = ttk.Button(nav_frame, text="Save Config", command=self.save_permit_config)
-        self.btn_save_config.pack(side=tk.RIGHT)
+        # Config Save and Open Folder
+        actions_frame = ttk.Frame(nav_frame)
+        actions_frame.pack(side=tk.RIGHT, padx=5)
+        
+        self.btn_open_folder = ttk.Button(actions_frame, text="Open Folder", command=self.open_current_folder)
+        self.btn_open_folder.pack(side=tk.TOP, fill=tk.X, pady=(0, 2))
+        
+        self.btn_save_config = ttk.Button(actions_frame, text="Save Config", command=self.save_permit_config)
+        self.btn_save_config.pack(side=tk.TOP, fill=tk.X)
 
         # --- Options Section ---
         options_frame = ttk.Frame(main_frame)
@@ -739,6 +745,21 @@ You can also run this application via the command line for automation. Run `pyth
         self.btn_next.config(state=tk.NORMAL if has_folders and self.current_index < len(self.folders_data) - 1 else tk.DISABLED)
         self.btn_process.config(state=tk.NORMAL if can_process else tk.DISABLED)
         self.btn_save_config.config(state=tk.NORMAL if can_process else tk.DISABLED)
+        
+        if hasattr(self, 'btn_open_folder'):
+            self.btn_open_folder.config(state=tk.NORMAL if has_folders else tk.DISABLED)
+
+    def open_current_folder(self):
+        if self.current_index < 0 or not self.folders_data:
+            return
+        folder_path = self.folders_data[self.current_index].get('folder_path')
+        if folder_path and os.path.isdir(folder_path):
+            if sys.platform == "win32":
+                os.startfile(folder_path)
+            elif sys.platform == "darwin":
+                subprocess.call(["open", folder_path])
+            else:
+                subprocess.call(["xdg-open", folder_path])
 
     def check_unsaved_changes(self, *args):
         # Protect against trace firing during UI setup before button exists
