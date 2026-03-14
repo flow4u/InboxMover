@@ -96,7 +96,8 @@ class InboxMoverCore:
                 if file.lower().endswith('.zip'):
                     zip_path = os.path.join(root, file)
                     zip_info = self.inspect_zip(zip_path)
-                    if zip_info:
+                    # Only treat as a valid zip if it actually contains the receipt.json
+                    if zip_info and zip_info.get("receipt_raw"):
                         data["zip_path"] = zip_path
                         data["permitId"] = zip_info["permitId"]
                         data["receipt"] = zip_info["receipt"]
