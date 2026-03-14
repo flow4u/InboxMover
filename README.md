@@ -34,6 +34,8 @@ sudo apt install python3 python3-tk
 ```
 
 
+
+
 ## 🚀 Installation & Setup
 
 Because Inbox Mover is a standalone script, "installing" it just means placing it somewhere convenient and setting up a shortcut.
@@ -60,11 +62,13 @@ Because Inbox Mover is a standalone script, "installing" it just means placing i
 
 *Note: The application will automatically create a ```permit_configs``` folder in the same directory as the script to save your settings.*
 
+
+
 ## 🖱️ How to Use (GUI Mode)
 
 To launch the graphical interface, double-click the shortcut you created on your Desktop.
 
-1. Directories
+**1. Directories**
 
 * **Search Folder 1 & 2:** The root directories where the app looks for child folders starting with ```transfer-```. You can specify up to two search locations.
 
@@ -74,7 +78,8 @@ To launch the graphical interface, double-click the shortcut you created on your
 
 * **Receipt Folder:** (Optional) A dedicated folder where the ```receipt.json``` will be extracted (prepended with a timestamp to prevent overwriting).
 
-2. Navigation
+
+**2. Navigation**
 
 * Use the **'⇦ Prev'** and **'Next ⇨'** buttons (or your keyboard's Left/Right arrow keys) to cycle through the found transfer folders.
 
@@ -82,7 +87,8 @@ To launch the graphical interface, double-click the shortcut you created on your
 
 * Use the **"Open"** buttons next to directory paths to quickly view those locations in your native file explorer.
 
-3. Conflict Resolution (If a file already exists)
+
+**3. Conflict Resolution (If a file already exists)**
 
 * **Overwrite:** Replaces the existing file in the target folder with the new one.
 
@@ -90,7 +96,8 @@ To launch the graphical interface, double-click the shortcut you created on your
 
 * **Rename existing:** Renames the file already on your disk by prepending a timestamp (e.g., ```YYMMDD-HHMMSS_filename.txt```), then extracts the new file normally.
 
-4. Post Processing
+
+**4. Post Processing**
 
 * **Leave:** Leaves the files in places.
 
@@ -98,7 +105,8 @@ To launch the graphical interface, double-click the shortcut you created on your
 
 * **Move:** Moves the entire transfer folder and all its contents to the Processed Folder.
 
-5. Configurations & Config IDs
+
+**5. Configurations & Config IDs**
 
 The application reads the ```receipt.json ```file inside the ZIP to identify a Config ID (previously Permit ID).
 
@@ -107,6 +115,8 @@ The application reads the ```receipt.json ```file inside the ZIP to identify a C
 * Once you set up your folders and rules for a specific Config ID, click 'Save Config'.
 
 * The next time you encounter a transfer folder with that exact Config ID, the application will automatically load your saved folder paths and settings.
+
+
 
 ## 💻 How to Use (CLI Mode)
 
