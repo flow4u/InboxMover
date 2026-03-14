@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Inbox Mover v0.5
+Inbox Mover v0.6
 the perfect FileButler companion
 A utility to process and extract zip files containing a receipt.json,
 with both a Material-inspired GUI and a CLI mode.
@@ -21,7 +21,7 @@ import subprocess
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
-VERSION = "0.5"
+VERSION = "0.6"
 CONFIG_DIR = "permit_configs"
 
 # --------------------------------------------------------------------------- #
@@ -219,18 +219,27 @@ class InboxMoverCore:
                 file_list = [f for f in zf.infolist() if not f.is_dir()]
                 total = len(file_list)
                 for i, zinfo in enumerate(file_list):
-                    safe_name = zinfo.filename.lstrip('/')
+                    original_name = zinfo.filename
                     
-                    if safe_name.lower().endswith('receipt.json'):
+                    # Determine if the path inside the zip is absolute
+                    is_absolute = original_name.startswith('/') or original_name.startswith('\\') or (len(original_name) >= 3 and original_name[1] == ':' and original_name[2] in ('/', '\\'))
+                    
+                    if original_name.lower().endswith('receipt.json'):
                         timestamp = datetime.datetime.now().strftime("%y%m%d-%H%M%S")
-                        new_filename = f"{timestamp}-{os.path.basename(safe_name)}"
+                        new_filename = f"{timestamp}-{os.path.basename(original_name)}"
                         if receipt_folder and os.path.isdir(receipt_folder):
                             ext_path = os.path.join(receipt_folder, new_filename)
+                        elif is_absolute:
+                            ext_path = os.path.join(os.path.dirname(original_name), new_filename)
                         else:
-                            ext_path = os.path.join(target_folder, os.path.dirname(safe_name), new_filename)
+                            ext_path = os.path.join(target_folder, os.path.dirname(original_name.lstrip('/\\')), new_filename)
                     else:
-                        ext_path = os.path.join(target_folder, safe_name)
-                        
+                        if is_absolute:
+                            ext_path = original_name
+                        else:
+                            safe_name = original_name.lstrip('/\\')
+                            ext_path = os.path.join(target_folder, safe_name)
+                            
                     os.makedirs(os.path.dirname(ext_path), exist_ok=True)
                     final_path = get_final_path(ext_path)
 
@@ -324,6 +333,13 @@ class InboxMoverGUI:
         self.inbox_name_var = tk.StringVar(value="")
         self.zip_name_var = tk.StringVar(value="No Transfer Folders Found")
         self.permit_id_var = tk.StringVar(value="")
+
+        # Trace variables to detect unsaved changes dynamically
+        self.target_folder_var.trace_add("write", self.check_unsaved_changes)
+        self.target_zip_folder_var.trace_add("write", self.check_unsaved_changes)
+        self.receipt_folder_var.trace_add("write", self.check_unsaved_changes)
+        self.conflict_action_var.trace_add("write", self.check_unsaved_changes)
+        self.post_action_var.trace_add("write", self.check_unsaved_changes)
 
         self.setup_ui()
         self.apply_theme()
@@ -472,6 +488,7 @@ class InboxMoverGUI:
         style = ttk.Style()
         style.configure(".", font=("Helvetica", self.base_font_size))
         style.configure("TButton", font=("Helvetica", self.base_font_size))
+        style.configure("Accent.TButton", font=("Helvetica", self.base_font_size, "bold"))
         style.configure("TLabelframe.Label", font=("Helvetica", self.base_font_size, "bold"))
         
         self.lbl_title.config(font=("Helvetica", self.base_font_size + 14, "bold"))
@@ -510,6 +527,10 @@ class InboxMoverGUI:
             entry_fg = "#ffffff"
             text_bg = "#1e1e1e"
             
+            accent_bg = "#d97706" # Material Amber 600
+            accent_fg = "#ffffff"
+            accent_active = "#f59e0b" # Material Amber 500
+            
             self.theme_btn.config(text="☀ Light Mode")
         else:
             self.root.configure(bg="#f0f0f0")
@@ -523,6 +544,10 @@ class InboxMoverGUI:
             entry_fg = "#000000"
             text_bg = "#ffffff"
             
+            accent_bg = "#f59e0b" # Material Amber 500
+            accent_fg = "#ffffff"
+            accent_active = "#d97706" # Material Amber 600
+            
             self.theme_btn.config(text="☾ Dark Mode")
 
         # Configure TTK styles
@@ -532,6 +557,10 @@ class InboxMoverGUI:
         style.configure("TLabelframe.Label", background=bg_color, foreground=fg_color)
         style.configure("TButton", background=btn_bg, foreground=btn_fg, padding=5, borderwidth=0)
         style.map("TButton", background=[('active', btn_active)])
+        
+        style.configure("Accent.TButton", background=accent_bg, foreground=accent_fg, padding=5, borderwidth=0)
+        style.map("Accent.TButton", background=[('active', accent_active)])
+        
         style.configure("TRadiobutton", background=bg_color, foreground=fg_color)
         style.configure("TEntry", fieldbackground=entry_bg, foreground=entry_fg)
         
@@ -611,6 +640,10 @@ Inbox Mover processes ZIP files (typically containing a receipt.json) by extract
 • If you set up your folders and rules for a specific Config ID, click 'Save Config'.
 • The next time you encounter a ZIP with that exact Config ID, the application will automatically load your saved folder paths and conflict/post-action settings.
 
+6. ADVANCED FEATURES (OVERRIDES & PATHS)
+• Absolute Paths: If a file inside the ZIP is mapped to an absolute path (e.g., C:\\logs\\file.txt), it ignores the Target Folder and extracts directly to that path, creating folders as needed.
+• Receipt Overrides: If receipt.json contains keys like 'target_folder', 'process_folder', 'receipt_folder', 'conflict_resolution', or 'post_processing', these values will automatically override your saved GUI settings. The 'Save Config' button will turn orange to indicate unsaved changes forced by the receipt.
+
 CLI MODE
 You can also run this application via the command line for automation. Run `python inbox_mover.py --cli --help` in your terminal for details.
 """
@@ -679,7 +712,16 @@ You can also run this application via the command line for automation. Run `pyth
             if 'conflict_action' in config: self.conflict_action_var.set(config['conflict_action'])
             if 'post_action' in config: self.post_action_var.set(config['post_action'])
             
+        # Apply overrides from receipt.json if present and not empty
+        receipt = current_data.get('receipt') or {}
+        if receipt.get('target_folder'): self.target_folder_var.set(receipt.get('target_folder'))
+        if receipt.get('process_folder'): self.target_zip_folder_var.set(receipt.get('process_folder'))
+        if receipt.get('receipt_folder'): self.receipt_folder_var.set(receipt.get('receipt_folder'))
+        if receipt.get('conflict_resolution'): self.conflict_action_var.set(receipt.get('conflict_resolution'))
+        if receipt.get('post_processing'): self.post_action_var.set(receipt.get('post_processing'))
+            
         self.update_nav_buttons()
+        self.check_unsaved_changes()
 
     def set_receipt_text(self, text):
         self.receipt_text.config(state=tk.NORMAL)
@@ -697,6 +739,47 @@ You can also run this application via the command line for automation. Run `pyth
         self.btn_next.config(state=tk.NORMAL if has_folders and self.current_index < len(self.folders_data) - 1 else tk.DISABLED)
         self.btn_process.config(state=tk.NORMAL if can_process else tk.DISABLED)
         self.btn_save_config.config(state=tk.NORMAL if can_process else tk.DISABLED)
+
+    def check_unsaved_changes(self, *args):
+        # Protect against trace firing during UI setup before button exists
+        if not hasattr(self, 'btn_save_config'):
+            return 
+            
+        if self.current_index < 0 or not self.folders_data:
+            self.btn_save_config.config(style="TButton", text="Save Config")
+            return
+            
+        current_data = self.folders_data[self.current_index]
+        permit_id = current_data.get('permitId')
+        can_process = current_data.get('can_process', False)
+        
+        if not permit_id or not can_process:
+            self.btn_save_config.config(style="TButton", text="Save Config")
+            return
+            
+        saved_config = self.core.load_config(permit_id)
+        
+        current_config = {
+            "target_folder": self.target_folder_var.get(),
+            "target_zip_folder": self.target_zip_folder_var.get(),
+            "receipt_folder": self.receipt_folder_var.get(),
+            "conflict_action": self.conflict_action_var.get(),
+            "post_action": self.post_action_var.get()
+        }
+
+        is_unsaved = False
+        if saved_config is None:
+            # If there's no saved config, it's definitively unsaved
+            is_unsaved = True
+        else:
+            # Compare exact match
+            if current_config != saved_config:
+                is_unsaved = True
+                
+        if is_unsaved:
+            self.btn_save_config.config(style="Accent.TButton", text="Save Config *")
+        else:
+            self.btn_save_config.config(style="TButton", text="Save Config")
 
     def prev_zip(self):
         if self.current_index > 0:
@@ -727,6 +810,7 @@ You can also run this application via the command line for automation. Run `pyth
         try:
             self.core.save_config(permit_id, config)
             messagebox.showinfo("Success", f"Configuration saved for Config ID: {permit_id}")
+            self.check_unsaved_changes()
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save configuration:\n{e}")
 
@@ -837,7 +921,15 @@ def run_cli():
             }
             print("  Using CLI arguments for configuration.")
         else:
-            print("  Loaded saved configuration for this Permit ID.")
+            print("  Loaded saved configuration for this Config ID.")
+
+        # Apply overrides from receipt.json if present and not empty
+        receipt = data.get('receipt') or {}
+        if receipt.get('target_folder'): config['target_folder'] = receipt.get('target_folder')
+        if receipt.get('process_folder'): config['target_zip_folder'] = receipt.get('process_folder')
+        if receipt.get('receipt_folder'): config['receipt_folder'] = receipt.get('receipt_folder')
+        if receipt.get('conflict_resolution'): config['conflict_action'] = receipt.get('conflict_resolution')
+        if receipt.get('post_processing'): config['post_action'] = receipt.get('post_processing')
 
         # Validate post-action move requirement
         if config.get('post_action') == 'move' and not config.get('target_zip_folder'):
