@@ -2,7 +2,7 @@
 
 Inbox Mover is a cross-platform utility designed to process and extract ZIP files (typically containing a ```receipt.json``` file) into a designated target folder while automatically resolving file conflicts based on your preferences. It features both a user-friendly Material-inspired graphical interface (GUI) and a Command-Line Interface (CLI) for automation.
 
-<img src="blob:chrome-untrusted://media-app/3a85943b-5df3-4ce0-a5ab-101e59f0471a" alt="Screenshot 2026-03-14 11.35.06.png"/>
+
 
 ## 🛠️ Prerequisites
 
