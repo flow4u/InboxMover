@@ -1,27 +1,28 @@
-# Inbox Mover - the FileButler companion
+# Inbox Mover - the perfect FileButler companion
 
-**Inbox Mover** is a cross-platform utility designed to process and extract ZIP files (typically containing a ```receipt.json``` file) into a designated target folder while automatically resolving file conflicts based on your preferences. It features both a user-friendly Material-inspired graphical interface (GUI) and a Command-Line Interface (CLI) for automation.<img width="745" height="594" alt="Screenshot 2026-03-13 17 24 58" src="https://github.com/user-attachments/assets/6613a2bf-be19-4ad5-880e-12fc77532098" />
+Inbox Mover is a cross-platform utility designed to process and extract ZIP files (typically containing a ```receipt.json``` file) into a designated target folder while automatically resolving file conflicts based on your preferences. It features both a user-friendly Material-inspired graphical interface (GUI) and a Command-Line Interface (CLI) for automation.
 
+<img src="blob:chrome-untrusted://media-app/3a85943b-5df3-4ce0-a5ab-101e59f0471a" alt="Screenshot 2026-03-14 11.35.06.png"/>
 
 ## 🛠️ Prerequisites
 
-To run Inbox Mover, you need Python 3 installed on your system. The application uses Python's built-in libraries, including tkinter for the GUI, meaning no external packages (via pip) are required.
+To run Inbox Mover, you need Python 3 installed on your system. The application uses Python's built-in libraries, including ```tkinter``` for the GUI, meaning no external packages (via ```pip```) are required.
 
-### Installing Python and Tkinter
+### **Installing Python and Tkinter**
 
-#### On Windows
+**On Windows**
 
-1. Go to the official Python website: python.org/downloads
+1. Go to the official Python website: [https://python.org/downloads]
 
 2. Download the latest Python 3 installer for Windows.
 
 3. Run the installer.
 
-4. ⚠️ CRITICAL STEP: At the bottom of the installer window, ensure you check the box that says **"Add Python to PATH"** before clicking "Install Now".
+4. **⚠️ CRITICAL STEPS**: Install for as admin for all users. At the bottom of the installer window, ensure you check the box that says "Add Python to PATH" before clicking "Install Now".
 
 5. *Note: Tkinter is included by default with standard Windows Python installations.*
 
-##### On Linux (Ubuntu/Debian-based)
+**On Linux (Ubuntu/Debian-based)**
 
 Most Linux distributions come with Python pre-installed, but ```tkinter``` often needs to be installed separately. Open your terminal and run:
 
@@ -33,83 +34,101 @@ sudo apt install python3 python3-tk
 
 ## 🚀 Installation & Setup
 
-Because Inbox Mover is a standalone script, "installing" it just means placing it somewhere convenient.
+Because Inbox Mover is a standalone script, "installing" it just means placing it somewhere convenient and setting up a shortcut.
+
+### Windows Setup
 
 1. Extract the ZIP file containing ```inbox_mover.py```.
 
-2. **Suggested Location (Windows):** Move the extracted folder to ```C:\Users\Public\Desktop\InboxMover```. This makes the tool easily accessible to any user account on that computer. You can also right-click inbox_mover.py and select "Send to -> Desktop (create shortcut)".
+2. Move the ```inbox_mover.py``` file to ```C:\scripts\inbox_mover``` *(You may need to create the "inbox_mover" folder on your C: drive if it doesn't exist yet)*.
 
-3. **Suggested Location (Linux):** You can place it in your ```~/Desktop directory``` or in a shared location like ```/opt/InboxMover``` if multiple users need access.
+3. Right-click on ```inbox_mover.py``` and select **"Create shortcut"**.
+
+4. Right-click the newly created shortcut and select **"Properties"**.
+
+5. In the Properties window, locate the **"Run"** dropdown menu, change it to **"Minimized"**, and click **OK**. *(This ensures the background command prompt stays out of your way when launching the app)*.
+
+6. Finally, move this customized shortcut to **C:\Users\Public\Desktop\**. This makes the application easily accessible on the desktop for every user account on the computer!
+
+### Linux Setup
+
+1. Extract the ZIP file containing inbox_mover.py.
+
+2. You can place it in your ```~/Desktop``` directory or in a shared location like ```/opt/InboxMover``` if multiple users need access.
 
 *Note: The application will automatically create a ```permit_configs``` folder in the same directory as the script to save your settings.*
 
 ## 🖱️ How to Use (GUI Mode)
 
-To launch the graphical interface:
+To launch the graphical interface, double-click the shortcut you created on your Desktop.
 
-* **Windows:** Simply double-click the ```inbox_mover.py``` file.
+1. Directories
 
-* **Linux/Mac:** Open a terminal, navigate to the folder, and run ```python3 inbox_mover.py```.
+* **Search Folder 1 & 2:** The root directories where the app looks for child folders starting with ```transfer-```. You can specify up to two search locations.
 
-**1. Directories**
+* **Target Folder:** The directory where the contents of the ZIP files will be extracted.
 
-* **Search Folder:** The root directory where the app looks for ZIP files. It searches all subfolders recursively.
+* **Processed Folder:** (Optional) The directory where the entire transfer folder is moved if the "Move" post-action is selected.
 
-* **Target Folder:** The directory where the contents of the ZIP will be extracted.
+* **Receipt Folder:** (Optional) A dedicated folder where the ```receipt.json``` will be extracted (prepended with a timestamp to prevent overwriting).
 
-* **Target Zip Folder:** (Optional) The directory where the original ZIP file is moved if the "Move the zip" post-action is selected.
+2. Navigation
 
-**2. Navigation**
+* Use the **'⇦ Prev'** and **'Next ⇨'** buttons (or your keyboard's Left/Right arrow keys) to cycle through the found transfer folders.
 
-* Use the '**⇦ Prev**' and '**Next ⇨**' buttons (or your keyboard's Left/Right arrow keys) to cycle through the found ZIP files.
+* Click **'↻ Refresh'** to manually rescan the Search Folders for new or modified transfer folders.
 
-* Click '**↻ Refresh**' to manually rescan the Search Folder for new or modified ZIPs.
+* Use the **"Open"** buttons next to directory paths to quickly view those locations in your native file explorer.
 
-**3. Conflict Resolution** (If a file already exists)
+3. Conflict Resolution (If a file already exists)
 
-* **Overwrite:** Replaces the existing file in the target folder with the new one from the ZIP.
+* **Overwrite:** Replaces the existing file in the target folder with the new one.
 
 * **Keep both:** Extracts the new file and adds a number to its filename (e.g., ```file (1).txt)```.
 
 * **Rename existing:** Renames the file already on your disk by prepending a timestamp (e.g., ```YYMMDD-HHMMSS_filename.txt```), then extracts the new file normally.
 
-**4. Post Processing**
+4. Post Processing
 
-* **Leave:** Keeps the original ZIP file exactly where it was found.
+* **Leave:** Leaves the files in places.
 
-* **Delete:** Permanently deletes the ZIP file after successful extraction.
+* **Delete:** Permanently deletes the entire transfer folder and all its contents after successful extraction.
 
-* **Move:** Moves the ZIP file to the specified 'Target Zip Folder'.
+* **Move:** Moves the entire transfer folder and all its contents to the Processed Folder.
 
-**5. Configurations & Permit IDs**
+5. Configurations & Config IDs
 
-The application reads the ```receipt.json``` file inside the ZIP to identify a Permit ID.
+The application reads the ```receipt.json ```file inside the ZIP to identify a Config ID (previously Permit ID).
 
-* If you set up your folders and rules for a specific Permit ID, click 'Save Permit Id Config'.
+* If no ```receipt.json``` is found, a "DEFAULT" Config ID is assigned.
 
-* The next time you encounter a ZIP with that exact Permit ID, the application will automatically load your saved folder paths and settings.
+* Once you set up your folders and rules for a specific Config ID, click 'Save Config'.
+
+* The next time you encounter a transfer folder with that exact Config ID, the application will automatically load your saved folder paths and settings.
 
 ## 💻 How to Use (CLI Mode)
 
 You can run Inbox Mover headlessly from the command line, which is useful for automation scripts or batch processing.
 
-**Basic Usage:**
+### Basic Usage:
 
-```python inbox_mover.py --cli -s <search_folder> -t <target_folder> [options]```
+```python inbox_mover.py --cli -s <search_folder_1> <search_folder_2> -t <target_folder> [options]```
 
 
 **Available Arguments:**
 
 * ```--cli```: Triggers the Command-Line mode.
 
-* ```-s, --search-folder```: (Required) Folder to search for ZIP files.
+* ```-s, --search-folders```: (Required) One or more folders to search for transfer folders.
 
 * ```-t, --target-folder```: (Required) Default target folder for extraction.
 
-* ```-z, --target-zip-folder```: Target folder for moving processed ZIPs.
+* ```-z, --target-zip-folder```: Target folder for moving processed folders (Processed Folder).
 
-* ```-c, --conflict-action```: Action when extracted file already exists. Choices: ```overwrite```, ```keep_both```, ```rename_existing``` (Default: ```overwrite```).
+* ```-r, --receipt-folder```: Target folder specifically for the receipt.json file.
 
-* ```-p, --post-action```: Action to perform on ZIP after extraction. Choices: ```leave```, ```delete```, ```move``` (Default: ```leave```).
+* ```-c, --conflict-action```: Action when extracted file already exists. Choices: overwrite, keep_both, rename_existing (Default: overwrite).
 
-*Note: If a saved configuration exists for a Permit ID found during a CLI run, the script will prioritize the saved configuration over the CLI arguments.*
+* ```-p, --post-action```: Action to perform after extraction. Choices: leave, delete, move (Default: leave).
+
+*Note: If a saved configuration exists for a Config ID found during a CLI run, the script will prioritize the saved configuration over the CLI arguments.*
