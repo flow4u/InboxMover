@@ -36,7 +36,7 @@ Because Inbox Mover is a standalone script, "installing" it just means placing i
 ### **Windows Setup**
 
 1. Extract the ZIP file containing inbox\_mover.py.  
-2. Move the inbox\_mover.py file to C:\\scripts\\ *(You may need to create the "scripts" folder on your C: drive if it doesn't exist yet)*.  
+2. Move the *inbox\_mover.py* file to **C:\\scripts\\inbox\_mover** *(You may need to create the *inbox\_mover* folder on your C: drive if it doesn't exist yet)*.  
 3. Right-click on inbox\_mover.py and select **"Create shortcut"**.  
 4. Right-click the newly created shortcut and select **"Properties"**.  
 5. In the Properties window, locate the **"Run"** dropdown menu, change it to **"Minimized"**, and click **OK**. *(This ensures the background command prompt stays out of your way when launching the app).*  
