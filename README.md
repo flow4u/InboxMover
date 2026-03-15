@@ -6,7 +6,7 @@
 
 **Inbox Mover** is optimized to use the **receipt.json** in **myDRE FileButler.**
 
-![Inbox Mover Screenshot](./FileButler.png)
+![Inbox Mover Screenshot](https://github.com/flow4u/InboxMover/blob/main/FileButler.png)
 
 ## **🛠️ Prerequisites**
 
