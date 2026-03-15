@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Inbox Mover v0.7
+Inbox Mover v0.8
 the perfect FileButler companion
 A utility to process and extract zip files containing a receipt.json,
 with both a Material-inspired GUI and a CLI mode.
@@ -16,12 +16,13 @@ import datetime
 import argparse
 import threading
 import subprocess
+import getpass
 
 # Tkinter imports
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
-VERSION = "0.7"
+VERSION = "0.8"
 CONFIG_DIR = "permit_configs"
 
 # --------------------------------------------------------------------------- #
@@ -179,6 +180,7 @@ class InboxMoverCore:
         """Write a structured JSON log entry."""
         log_entry = {
             "timestamp": datetime.datetime.now().isoformat(),
+            "user": getpass.getuser(),
             "status": status,
             "folder_name": folder_data.get('folder_name', 'Unknown'),
             "config_id": folder_data.get('permitId', 'Unknown'),
@@ -733,12 +735,13 @@ class InboxMoverGUI:
                     try:
                         entry = json.loads(line)
                         ts = entry.get("timestamp", "").replace("T", " ")[:19]
+                        user = entry.get("user", "Unknown")
                         status = entry.get("status", "UNKNOWN")
                         folder = entry.get("folder_name", "")
                         cfg = entry.get("config_id", "")
                         msg = entry.get("message", "")
                         
-                        head_str = f"[{ts}] {status} | Config: {cfg} | Folder: {folder}\n"
+                        head_str = f"[{ts}] {status} | User: {user} | Config: {cfg} | Folder: {folder}\n"
                         status_tag = "success" if status == "SUCCESS" else ("error" if status == "ERROR" else "header")
                         text_widget.insert(tk.END, head_str, status_tag)
                         

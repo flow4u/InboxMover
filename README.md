@@ -1,12 +1,10 @@
-# **Inbox Mover \- the perfect FileButler companion (v0.7)**
+# **Inbox Mover \- the perfect FileButler companion (v0.8)**
 
-**Inbox Mover** is a cross-platform utility designed to process files in the *transfer-* folders found on i: and z:\inbox on [**myDRE**](https://mydre.org). 
+**Inbox Mover** is a cross-platform utility designed to process files in the **transfer-** folders found in **i:** and **z:\\inbox** on [**myDRE**](https://www.google.com/search?q=https://mydre.org)**.** 
 
 **Inbox Mover** processes the files into a designated target folder while automatically resolving file conflicts based on your preferences. Zip-files will be automatically extracted. It features both a user-friendly Material-inspired graphical interface (GUI) and a Command-Line Interface (CLI) for automation.
 
-**Inbox Mover** is optimized to use the *receipt.json* in **myDRE FileButler**.
-
-![Screenshot Inbox Mover](./FileButler.png)
+**Inbox Mover** is optimized to use the **receipt.json** in **myDRE FileButler.**
 
 ## **🛠️ Prerequisites**
 
@@ -16,7 +14,7 @@ To run Inbox Mover, you need **Python 3** installed on your system. The applicat
 
 #### **On Windows**
 
-1. Go to the official Python website: [python.org/downloads](https://www.python.org/downloads/)  
+1. Go to the official Python website: [python.org/downloads](https://www.google.com/search?q=https://www.python.org/downloads/)  
 2. Download the latest Python 3 installer for Windows.  
 3. Run the installer.  
 4. **⚠️ CRITICAL STEP:** At the bottom of the installer window, ensure you check the box that says **"Add Python to PATH"** before clicking "Install Now".  

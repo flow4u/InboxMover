@@ -1,4 +1,4 @@
-# **Inbox Mover \- Comprehensive Test Plan (v0.7)**
+# **Inbox Mover \- Comprehensive Test Plan (v0.8)**
 
 ## **1\. Introduction**
 
@@ -47,7 +47,7 @@ Before beginning the tests, set up the following directory structure and dummy f
 
 | Test ID | Action | Expected Result | Status |
 | :---- | :---- | :---- | :---- |
-| UI-01 | Launch inbox\_mover.py | App opens with default size (800x650), Dark Mode enabled. Version reads 0.7. |  |
+| UI-01 | Launch inbox\_mover.py | App opens with default size (800x650), Dark Mode enabled. Version reads 0.8. |  |
 | UI-02 | Click "Toggle Light Mode" | UI switches to a light color palette. Text remains readable. |  |
 | UI-03 | Click "A+" and "A-" buttons | Font size of all labels, buttons, and text areas increases/decreases. |  |
 | UI-04 | Click "? Help" | Help window opens displaying instructions including Section 6 for Advanced Features. |  |
@@ -131,7 +131,7 @@ Before beginning the tests, set up the following directory structure and dummy f
 
 | Test ID | Command / Action | Expected Result | Status |
 | :---- | :---- | :---- | :---- |
-| CLI-01 | python inbox\_mover.py \--cli \--help | Displays help menu with all available arguments, confirming v0.7. |  |
+| CLI-01 | python inbox\_mover.py \--cli \--help | Displays help menu with all available arguments, confirming v0.8. |  |
 | CLI-02 | python inbox\_mover.py \--cli \-s "C:\\Test\\Search1" \-t "C:\\Test\\Target" | Scans Search1. Processes folders. Output shows folder names, Config IDs, and success/skip statuses. |  |
 | CLI-03 | Ensure transfer-04-overrides is in Search1. Run the command from CLI-02. | The CLI outputs that it processed transfer-04. It respects the target\_folder and post\_processing values extracted from its internal receipt.json, ignoring the \-t argument. View log to confirm the run was recorded. |  |
 
