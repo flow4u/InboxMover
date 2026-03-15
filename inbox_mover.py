@@ -613,23 +613,23 @@ class InboxMoverGUI:
         ttk.Radiobutton(post_col, text="Delete the files", variable=self.post_action_var, value="delete", style="Card.TRadiobutton").pack(anchor=tk.W)
         ttk.Radiobutton(post_col, text="Move the files to Processed Folder", variable=self.post_action_var, value="move", style="Card.TRadiobutton").pack(anchor=tk.W)
 
-        # Card Text Area
-        text_wrapper = ttk.Frame(self.card_frame, style="Card.TFrame")
-        text_wrapper.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
-        ttk.Label(text_wrapper, text="Source Folder Content:", style="CardHeader.TLabel").pack(anchor=tk.W, pady=(0, 5))
-        self.receipt_text = tk.Text(text_wrapper, wrap=tk.WORD, state=tk.DISABLED, relief="flat", highlightthickness=1)
-        scrollbar = ttk.Scrollbar(text_wrapper, orient=tk.VERTICAL, command=self.receipt_text.yview)
-        self.receipt_text.configure(yscrollcommand=scrollbar.set)
-        self.receipt_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-        # Card Bottom Bar (Actions)
+        # Card Bottom Bar (Actions) - Pack this FIRST so it anchors to the bottom and never gets pushed off-screen
         card_actions = ttk.Frame(self.card_frame, style="Card.TFrame")
-        card_actions.pack(fill=tk.X)
+        card_actions.pack(side=tk.BOTTOM, fill=tk.X)
         self.btn_process = ttk.Button(card_actions, text="PROCESS FOLDER", style="Process.TButton", command=self.process_current_zip)
         self.btn_process.pack(side=tk.RIGHT, ipady=4, ipadx=10)
         self.btn_save_config = ttk.Button(card_actions, text="Save Config", command=self.save_permit_config)
         self.btn_save_config.pack(side=tk.RIGHT, padx=10)
+
+        # Card Text Area - Pack this LAST with expand=True so it dynamically fills the REMAINING space
+        text_wrapper = ttk.Frame(self.card_frame, style="Card.TFrame")
+        text_wrapper.pack(side=tk.TOP, fill=tk.BOTH, expand=True, pady=(0, 15))
+        ttk.Label(text_wrapper, text="Source Folder Content:", style="CardHeader.TLabel").pack(anchor=tk.W, pady=(0, 5))
+        self.receipt_text = tk.Text(text_wrapper, wrap=tk.WORD, state=tk.DISABLED, relief="flat", highlightthickness=1, height=10)
+        scrollbar = ttk.Scrollbar(text_wrapper, orient=tk.VERTICAL, command=self.receipt_text.yview)
+        self.receipt_text.configure(yscrollcommand=scrollbar.set)
+        self.receipt_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
 
         self.update_nav_buttons()
 
