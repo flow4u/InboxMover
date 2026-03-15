@@ -208,10 +208,39 @@ class InboxMoverCore:
         
         actions_log = []
 
-        if not target_folder or not os.path.isdir(target_folder):
-            error_msg = f"Target folder '{target_folder}' is invalid."
+        if not target_folder:
+            error_msg = "Target folder is not specified."
             self.write_log("ERROR", folder_data, config, actions_log, error_msg)
             raise ValueError(error_msg)
+
+        if not os.path.exists(target_folder):
+            try:
+                os.makedirs(target_folder, exist_ok=True)
+            except Exception as e:
+                error_msg = f"Failed to create Target folder '{target_folder}': {e}"
+                self.write_log("ERROR", folder_data, config, actions_log, error_msg)
+                raise ValueError(error_msg)
+
+        if receipt_folder and not os.path.exists(receipt_folder):
+            try:
+                os.makedirs(receipt_folder, exist_ok=True)
+            except Exception as e:
+                error_msg = f"Failed to create Receipt folder '{receipt_folder}': {e}"
+                self.write_log("ERROR", folder_data, config, actions_log, error_msg)
+                raise ValueError(error_msg)
+                
+        if post_action == 'move':
+            if not target_zip_folder:
+                error_msg = "Processed Folder is not specified but post action is 'move'."
+                self.write_log("ERROR", folder_data, config, actions_log, error_msg)
+                raise ValueError(error_msg)
+            if not os.path.exists(target_zip_folder):
+                try:
+                    os.makedirs(target_zip_folder, exist_ok=True)
+                except Exception as e:
+                    error_msg = f"Failed to create Processed folder '{target_zip_folder}': {e}"
+                    self.write_log("ERROR", folder_data, config, actions_log, error_msg)
+                    raise ValueError(error_msg)
 
         def get_final_path(extracted_path):
             if os.path.exists(extracted_path):
@@ -331,9 +360,6 @@ class InboxMoverCore:
                         "destination": "DELETED"
                     })
             elif post_action == 'move':
-                if not target_zip_folder or not os.path.isdir(target_zip_folder):
-                    raise ValueError(f"Processed Folder '{target_zip_folder}' is invalid.")
-                
                 folder_path = folder_data.get('folder_path')
                 if not folder_path or not os.path.isdir(folder_path):
                     raise ValueError(f"Source folder '{folder_path}' is invalid or missing.")
@@ -391,8 +417,16 @@ class InboxMoverGUI:
         self.current_index = -1
 
         # Variables
-        self.search_folder_1_var = tk.StringVar(value=settings.get("search_folder_1", settings.get("search_folder", "")))
-        self.search_folder_2_var = tk.StringVar(value=settings.get("search_folder_2", ""))
+        sf1 = settings.get("search_folder_1", settings.get("search_folder", ""))
+        sf2 = settings.get("search_folder_2", "")
+        
+        if not sf1:
+            sf1 = "i:/"
+        if not sf2:
+            sf2 = "z:/inbox"
+
+        self.search_folder_1_var = tk.StringVar(value=sf1)
+        self.search_folder_2_var = tk.StringVar(value=sf2)
         self.target_folder_var = tk.StringVar()
         self.target_zip_folder_var = tk.StringVar()
         self.receipt_folder_var = tk.StringVar()
@@ -906,16 +940,33 @@ You can also run this application via the command line for automation. Run `pyth
         self.permit_id_var.set(f"Config ID: {current_data['permitId']}")
         self.set_receipt_text(current_data['receipt_raw'])
         
-        # Attempt to load config for this permitId
-        config = self.core.load_config(current_data['permitId'])
-        if config:
-            if 'target_folder' in config: self.target_folder_var.set(config['target_folder'])
-            if 'target_zip_folder' in config: self.target_zip_folder_var.set(config['target_zip_folder'])
-            if 'receipt_folder' in config: self.receipt_folder_var.set(config['receipt_folder'])
-            if 'conflict_action' in config: self.conflict_action_var.set(config['conflict_action'])
-            if 'post_action' in config: self.post_action_var.set(config['post_action'])
+        # 1. Clear fields to prevent state leakage from previous folder
+        self.target_folder_var.set("")
+        self.target_zip_folder_var.set("")
+        self.receipt_folder_var.set("")
+        self.conflict_action_var.set("overwrite")
+        self.post_action_var.set("leave")
+
+        # 2. Load DEFAULT config as a baseline fallback for ALL folders
+        default_config = self.core.load_config("DEFAULT")
+        if default_config:
+            if default_config.get('target_folder'): self.target_folder_var.set(default_config['target_folder'])
+            if default_config.get('target_zip_folder'): self.target_zip_folder_var.set(default_config['target_zip_folder'])
+            if default_config.get('receipt_folder'): self.receipt_folder_var.set(default_config['receipt_folder'])
+            if default_config.get('conflict_action'): self.conflict_action_var.set(default_config['conflict_action'])
+            if default_config.get('post_action'): self.post_action_var.set(default_config['post_action'])
+
+        # 3. Load specific Permit ID config (if applicable and exists) and overwrite baseline
+        if current_data['permitId'] != "DEFAULT":
+            specific_config = self.core.load_config(current_data['permitId'])
+            if specific_config:
+                if specific_config.get('target_folder'): self.target_folder_var.set(specific_config['target_folder'])
+                if specific_config.get('target_zip_folder'): self.target_zip_folder_var.set(specific_config['target_zip_folder'])
+                if specific_config.get('receipt_folder'): self.receipt_folder_var.set(specific_config['receipt_folder'])
+                if specific_config.get('conflict_action'): self.conflict_action_var.set(specific_config['conflict_action'])
+                if specific_config.get('post_action'): self.post_action_var.set(specific_config['post_action'])
             
-        # Apply overrides from receipt.json if present and not empty
+        # 4. Apply absolute overrides from receipt.json if present and not empty
         receipt = current_data.get('receipt') or {}
         if receipt.get('target_folder'): self.target_folder_var.set(receipt.get('target_folder'))
         if receipt.get('process_folder'): self.target_zip_folder_var.set(receipt.get('process_folder'))
@@ -987,8 +1038,16 @@ You can also run this application via the command line for automation. Run `pyth
 
         is_unsaved = False
         if saved_config is None:
-            # If there's no saved config, it's definitively unsaved
-            is_unsaved = True
+            # Don't show orange button on a completely unconfigured empty state
+            empty_config = {
+                "target_folder": "",
+                "target_zip_folder": "",
+                "receipt_folder": "",
+                "conflict_action": "overwrite",
+                "post_action": "leave"
+            }
+            if current_config != empty_config:
+                is_unsaved = True
         else:
             # Compare exact match
             if current_config != saved_config:
@@ -1127,21 +1186,33 @@ def run_cli():
             print("  Folder is empty. Skipping.")
             continue
         
-        # Load specific config if exists, otherwise fallback to CLI args
-        config = core.load_config(data['permitId'])
-        if not config:
-            config = {
-                "target_folder": args.target_folder,
-                "target_zip_folder": args.target_zip_folder,
-                "receipt_folder": args.receipt_folder,
-                "conflict_action": args.conflict_action,
-                "post_action": args.post_action
-            }
-            print("  Using CLI arguments for configuration.")
+        # Baseline from CLI arguments
+        config = {
+            "target_folder": args.target_folder,
+            "target_zip_folder": args.target_zip_folder,
+            "receipt_folder": args.receipt_folder,
+            "conflict_action": args.conflict_action,
+            "post_action": args.post_action
+        }
+        
+        # 1. Load DEFAULT config as fallback baseline
+        default_config = core.load_config("DEFAULT")
+        if default_config:
+            for k, v in default_config.items():
+                if v: config[k] = v
+            print("  Loaded DEFAULT configuration.")
         else:
-            print("  Loaded saved configuration for this Config ID.")
+            print("  Using CLI arguments for baseline configuration.")
 
-        # Apply overrides from receipt.json if present and not empty
+        # 2. Load specific config and override
+        if data['permitId'] != "DEFAULT":
+            specific_config = core.load_config(data['permitId'])
+            if specific_config:
+                for k, v in specific_config.items():
+                    if v: config[k] = v
+                print(f"  Loaded specific configuration for Config ID: {data['permitId']}.")
+
+        # 3. Apply overrides from receipt.json if present and not empty
         receipt = data.get('receipt') or {}
         if receipt.get('target_folder'): config['target_folder'] = receipt.get('target_folder')
         if receipt.get('process_folder'): config['target_zip_folder'] = receipt.get('process_folder')
