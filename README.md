@@ -2,6 +2,8 @@
 
 **Inbox Mover** is a cross-platform utility designed to process and extract ZIP files (typically containing a receipt.json file) into a designated target folder while automatically resolving file conflicts based on your preferences. It features both a user-friendly Material-inspired graphical interface (GUI) and a Command-Line Interface (CLI) for automation.
 
+![Screenshot Inbox Mover](./FileButler.png)
+
 ## **🛠️ Prerequisites**
 
 To run Inbox Mover, you need **Python 3** installed on your system. The application uses Python's built-in libraries, including tkinter for the GUI, meaning no external packages (via pip) are required.
