@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Inbox Mover v0.6
+Inbox Mover v0.7
 the perfect FileButler companion
 A utility to process and extract zip files containing a receipt.json,
 with both a Material-inspired GUI and a CLI mode.
@@ -21,7 +21,7 @@ import subprocess
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
-VERSION = "0.6"
+VERSION = "0.7"
 CONFIG_DIR = "permit_configs"
 
 # --------------------------------------------------------------------------- #
@@ -31,6 +31,7 @@ CONFIG_DIR = "permit_configs"
 class InboxMoverCore:
     def __init__(self):
         self.ensure_config_dir()
+        self.log_file = os.path.join(CONFIG_DIR, "process_log.jsonl")
 
     def ensure_config_dir(self):
         if not os.path.exists(CONFIG_DIR):
@@ -174,6 +175,24 @@ class InboxMoverCore:
         with open(config_path, 'w') as f:
             json.dump(config_data, f, indent=4)
 
+    def write_log(self, status, folder_data, config, actions, message=""):
+        """Write a structured JSON log entry."""
+        log_entry = {
+            "timestamp": datetime.datetime.now().isoformat(),
+            "status": status,
+            "folder_name": folder_data.get('folder_name', 'Unknown'),
+            "config_id": folder_data.get('permitId', 'Unknown'),
+            "files_processed": len([a for a in actions if a.get('type') in ('extract', 'copy')]),
+            "config_applied": config,
+            "actions": actions,
+            "message": message
+        }
+        try:
+            with open(self.log_file, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(log_entry) + '\n')
+        except Exception as e:
+            print(f"Failed to write log: {e}")
+
     def process_zip(self, folder_data, config, progress_callback=None):
         """
         Extract the zip and apply conflict resolution and post-processing.
@@ -184,20 +203,34 @@ class InboxMoverCore:
         post_action = config.get('post_action', 'leave')
         target_zip_folder = config.get('target_zip_folder')
         receipt_folder = config.get('receipt_folder')
+        
+        actions_log = []
 
         if not target_folder or not os.path.isdir(target_folder):
-            raise ValueError(f"Target folder '{target_folder}' is invalid.")
+            error_msg = f"Target folder '{target_folder}' is invalid."
+            self.write_log("ERROR", folder_data, config, actions_log, error_msg)
+            raise ValueError(error_msg)
 
         def get_final_path(extracted_path):
             if os.path.exists(extracted_path):
                 if conflict_action == 'overwrite':
-                    pass
+                    actions_log.append({
+                        "type": "conflict_resolved",
+                        "source": extracted_path,
+                        "message": "Existing file overwritten"
+                    })
                 elif conflict_action == 'keep_both':
                     base, ext = os.path.splitext(extracted_path)
                     counter = 1
                     while os.path.exists(f"{base} ({counter}){ext}"):
                         counter += 1
-                    extracted_path = f"{base} ({counter}){ext}"
+                    new_path = f"{base} ({counter}){ext}"
+                    actions_log.append({
+                        "type": "conflict_resolved",
+                        "source": extracted_path,
+                        "message": f"Kept both. Extracted file renamed to {os.path.basename(new_path)}"
+                    })
+                    extracted_path = new_path
                 elif conflict_action == 'rename_existing':
                     timestamp = datetime.datetime.now().strftime("%y%m%d-%H%M%S")
                     base, ext = os.path.splitext(extracted_path)
@@ -212,9 +245,15 @@ class InboxMoverCore:
                         renamed_path = f"{renamed_path}_{counter}"
                         
                     os.rename(extracted_path, renamed_path)
+                    actions_log.append({
+                        "type": "conflict_resolved",
+                        "source": extracted_path,
+                        "message": f"Existing file renamed to {os.path.basename(renamed_path)}"
+                    })
             return extracted_path
 
         def extract_zip_file(zip_path):
+            zip_filename = os.path.basename(zip_path)
             with zipfile.ZipFile(zip_path, 'r') as zf:
                 file_list = [f for f in zf.infolist() if not f.is_dir()]
                 total = len(file_list)
@@ -246,51 +285,80 @@ class InboxMoverCore:
                     with zf.open(zinfo) as source, open(final_path, "wb") as target:
                         shutil.copyfileobj(source, target)
                         
+                    actions_log.append({
+                        "type": "extract",
+                        "source": f"{zip_filename} -> {original_name}",
+                        "destination": final_path
+                    })
+                        
                     if progress_callback:
                         progress_callback(i + 1, total)
 
-        if folder_data.get('has_valid_zip') and folder_data.get('zip_path'):
-            extract_zip_file(folder_data['zip_path'])
-        else:
-            folder_path = folder_data.get('folder_path')
-            for root, _, files in os.walk(folder_path):
-                for file in files:
-                    src_path = os.path.join(root, file)
-                    if file.lower().endswith('.zip'):
-                        extract_zip_file(src_path)
-                    else:
-                        rel_path = os.path.relpath(src_path, folder_path)
-                        ext_path = os.path.join(target_folder, rel_path)
-                        os.makedirs(os.path.dirname(ext_path), exist_ok=True)
-                        final_path = get_final_path(ext_path)
-                        shutil.copy2(src_path, final_path)
+        try:
+            if folder_data.get('has_valid_zip') and folder_data.get('zip_path'):
+                extract_zip_file(folder_data['zip_path'])
+            else:
+                folder_path = folder_data.get('folder_path')
+                folder_name = folder_data.get('folder_name')
+                for root, _, files in os.walk(folder_path):
+                    for file in files:
+                        src_path = os.path.join(root, file)
+                        if file.lower().endswith('.zip'):
+                            extract_zip_file(src_path)
+                        else:
+                            rel_path = os.path.relpath(src_path, folder_path)
+                            ext_path = os.path.join(target_folder, rel_path)
+                            os.makedirs(os.path.dirname(ext_path), exist_ok=True)
+                            final_path = get_final_path(ext_path)
+                            shutil.copy2(src_path, final_path)
+                            
+                            actions_log.append({
+                                "type": "copy",
+                                "source": f"{folder_name} -> {rel_path}",
+                                "destination": final_path
+                            })
 
-        # Post Processing
-        if post_action == 'delete':
-            folder_path = folder_data.get('folder_path')
-            if folder_path and os.path.isdir(folder_path):
-                shutil.rmtree(folder_path)
-        elif post_action == 'move':
-            if not target_zip_folder or not os.path.isdir(target_zip_folder):
-                raise ValueError(f"Processed Folder '{target_zip_folder}' is invalid.")
-            
-            folder_path = folder_data.get('folder_path')
-            if not folder_path or not os.path.isdir(folder_path):
-                raise ValueError(f"Source folder '{folder_path}' is invalid or missing.")
+            # Post Processing
+            if post_action == 'delete':
+                folder_path = folder_data.get('folder_path')
+                if folder_path and os.path.isdir(folder_path):
+                    shutil.rmtree(folder_path)
+                    actions_log.append({
+                        "type": "post_processing",
+                        "source": folder_path,
+                        "destination": "DELETED"
+                    })
+            elif post_action == 'move':
+                if not target_zip_folder or not os.path.isdir(target_zip_folder):
+                    raise ValueError(f"Processed Folder '{target_zip_folder}' is invalid.")
                 
-            folder_name = folder_data.get('folder_name')
-            dest_path = os.path.join(target_zip_folder, folder_name)
-            
-            # handle if folder already exists in target zip folder
-            if os.path.exists(dest_path):
-                counter = 1
-                while os.path.exists(f"{dest_path}_{counter}"):
-                    counter += 1
-                dest_path = f"{dest_path}_{counter}"
+                folder_path = folder_data.get('folder_path')
+                if not folder_path or not os.path.isdir(folder_path):
+                    raise ValueError(f"Source folder '{folder_path}' is invalid or missing.")
+                    
+                folder_name = folder_data.get('folder_name')
+                dest_path = os.path.join(target_zip_folder, folder_name)
                 
-            shutil.move(folder_path, dest_path)
-        # 'leave' does nothing
+                # handle if folder already exists in target zip folder
+                if os.path.exists(dest_path):
+                    counter = 1
+                    while os.path.exists(f"{dest_path}_{counter}"):
+                        counter += 1
+                    dest_path = f"{dest_path}_{counter}"
+                    
+                shutil.move(folder_path, dest_path)
+                actions_log.append({
+                    "type": "post_processing",
+                    "source": folder_path,
+                    "destination": dest_path
+                })
+            # 'leave' does nothing
 
+            self.write_log("SUCCESS", folder_data, config, actions_log, "Successfully processed folder.")
+
+        except Exception as e:
+            self.write_log("ERROR", folder_data, config, actions_log, str(e))
+            raise e
 
 # --------------------------------------------------------------------------- #
 # GUI APPLICATION
@@ -367,10 +435,22 @@ class InboxMoverGUI:
         self.lbl_version = ttk.Label(title_frame, text=f"the perfect FileButler companion - version {VERSION}")
         self.lbl_version.pack(anchor=tk.W)
         
+        # Header Buttons (Right aligned)
         self.theme_btn = ttk.Button(header_frame, text="Toggle Light Mode", command=self.toggle_theme)
         self.theme_btn.pack(side=tk.RIGHT)
+        
         self.btn_help = ttk.Button(header_frame, text="? Help", width=6, command=self.show_help)
         self.btn_help.pack(side=tk.RIGHT, padx=5)
+        
+        self.btn_clear_log = ttk.Button(header_frame, text="🗑 Clear Log", command=self.clear_log)
+        self.btn_clear_log.pack(side=tk.RIGHT, padx=5)
+        
+        self.btn_view_log = ttk.Button(header_frame, text="📄 View Log", command=self.view_log)
+        self.btn_view_log.pack(side=tk.RIGHT, padx=5)
+
+        self.btn_open_log_folder = ttk.Button(header_frame, text="📂 Log Folder", command=self.open_log_folder)
+        self.btn_open_log_folder.pack(side=tk.RIGHT, padx=5)
+        
         self.btn_increase_font = ttk.Button(header_frame, text="A+", width=3, command=self.increase_font)
         self.btn_increase_font.pack(side=tk.RIGHT, padx=2)
         self.btn_decrease_font = ttk.Button(header_frame, text="A-", width=3, command=self.decrease_font)
@@ -590,11 +670,124 @@ class InboxMoverGUI:
     def on_closing(self):
         self.save_settings()
         self.root.destroy()
+        
+    def open_log_folder(self):
+        log_dir = os.path.abspath(CONFIG_DIR)
+        if not os.path.exists(log_dir):
+            os.makedirs(log_dir)
+            
+        if sys.platform == "win32":
+            os.startfile(log_dir)
+        elif sys.platform == "darwin":
+            subprocess.call(["open", log_dir])
+        else:
+            subprocess.call(["xdg-open", log_dir])
+
+    def view_log(self):
+        if not os.path.exists(self.core.log_file):
+            messagebox.showinfo("Log Empty", "No log file has been created yet.")
+            return
+            
+        # Create a modal window
+        log_win = tk.Toplevel(self.root)
+        log_win.title("Processing Log")
+        log_win.geometry("900x600")
+        log_win.transient(self.root)
+        log_win.grab_set()
+        
+        # Match root background
+        log_win.configure(bg=self.root.cget("bg"))
+        
+        frame = ttk.Frame(log_win, padding="15")
+        frame.pack(fill=tk.BOTH, expand=True)
+        
+        text_widget = tk.Text(frame, wrap=tk.WORD, font=("Courier", self.base_font_size))
+        scrollbar = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=text_widget.yview)
+        text_widget.configure(yscrollcommand=scrollbar.set)
+        
+        if self.is_dark_mode:
+            text_widget.configure(bg="#1e1e1e", fg="#ffffff", insertbackground="#ffffff")
+        else:
+            text_widget.configure(bg="#ffffff", fg="#000000", insertbackground="#000000")
+            
+        text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Color tags for formatting
+        text_widget.tag_configure("success", foreground="#10b981") # Green
+        text_widget.tag_configure("error", foreground="#ef4444") # Red
+        text_widget.tag_configure("header", font=("Courier", self.base_font_size, "bold"))
+        text_widget.tag_configure("info", foreground="#3b82f6" if not self.is_dark_mode else "#60a5fa") # Blue
+        
+        try:
+            with open(self.core.log_file, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+                
+            if not lines:
+                text_widget.insert(tk.END, "Log file is currently empty.")
+            else:
+                # Read log lines in reverse order (newest first)
+                for line in reversed(lines):
+                    if not line.strip(): 
+                        continue
+                    try:
+                        entry = json.loads(line)
+                        ts = entry.get("timestamp", "").replace("T", " ")[:19]
+                        status = entry.get("status", "UNKNOWN")
+                        folder = entry.get("folder_name", "")
+                        cfg = entry.get("config_id", "")
+                        msg = entry.get("message", "")
+                        
+                        head_str = f"[{ts}] {status} | Config: {cfg} | Folder: {folder}\n"
+                        status_tag = "success" if status == "SUCCESS" else ("error" if status == "ERROR" else "header")
+                        text_widget.insert(tk.END, head_str, status_tag)
+                        
+                        if msg:
+                            text_widget.insert(tk.END, f"  Message: {msg}\n")
+                        
+                        actions = entry.get("actions", [])
+                        if actions:
+                            text_widget.insert(tk.END, "  Actions:\n")
+                            for act in actions:
+                                a_type = str(act.get("type", "")).upper()
+                                a_src = act.get("source", "")
+                                a_dest = act.get("destination", "")
+                                a_msg = act.get("message", "")
+                                
+                                if a_type == "CONFLICT_RESOLVED":
+                                    text_widget.insert(tk.END, f"    - CONFLICT: {a_src} -> {a_msg}\n", "info")
+                                else:
+                                    text_widget.insert(tk.END, f"    - {a_type}: {a_src} -> {a_dest}\n")
+                                    
+                        text_widget.insert(tk.END, "-" * 80 + "\n\n")
+                    except json.JSONDecodeError:
+                        text_widget.insert(tk.END, f"Failed to parse line: {line}\n", "error")
+                        
+        except Exception as e:
+            text_widget.insert(tk.END, f"Error reading log file: {e}\n", "error")
+            
+        text_widget.config(state=tk.DISABLED)
+        
+        # Close button at bottom
+        btn_close = ttk.Button(log_win, text="Close", command=log_win.destroy, width=15)
+        btn_close.pack(pady=(0, 15))
+
+    def clear_log(self):
+        if not os.path.exists(self.core.log_file):
+            messagebox.showinfo("Log Empty", "The log file is already empty.")
+            return
+            
+        if messagebox.askyesno("Confirm Clear Log", "Are you sure you want to permanently delete all processing logs?"):
+            try:
+                open(self.core.log_file, 'w').close()
+                messagebox.showinfo("Success", "Log file cleared.")
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to clear log:\n{e}")
 
     def show_help(self):
         help_win = tk.Toplevel(self.root)
         help_win.title("Inbox Mover - Help")
-        help_win.geometry("650x500")
+        help_win.geometry("650x550")
         help_win.minsize(500, 400)
         
         # Match root background
@@ -649,6 +842,7 @@ Inbox Mover processes ZIP files (typically containing a receipt.json) by extract
 6. ADVANCED FEATURES (OVERRIDES & PATHS)
 • Absolute Paths: If a file inside the ZIP is mapped to an absolute path (e.g., C:\\logs\\file.txt), it ignores the Target Folder and extracts directly to that path, creating folders as needed.
 • Receipt Overrides: If receipt.json contains keys like 'target_folder', 'process_folder', 'receipt_folder', 'conflict_resolution', or 'post_processing', these values will automatically override your saved GUI settings. The 'Save Config' button will turn orange to indicate unsaved changes forced by the receipt.
+• Processing Log: The application automatically logs every extracted file, moved file, conflict rename, and post-processing action into a machine-readable JSONL file. Click '📄 View Log' to open it in a readable window, or '📂 Log Folder' to browse the files directly.
 
 CLI MODE
 You can also run this application via the command line for automation. Run `python inbox_mover.py --cli --help` in your terminal for details.
@@ -868,7 +1062,7 @@ You can also run this application via the command line for automation. Run `pyth
         threading.Thread(target=worker, daemon=True).start()
 
     def on_process_success(self):
-        messagebox.showinfo("Success", "Zip processed successfully.")
+        messagebox.showinfo("Success", "Zip processed successfully.\n\nDetails have been written to the log.")
         self.btn_process.config(text="PROCESS")
         
         # Refresh the list quietly as the folder might have been moved or deleted
@@ -893,7 +1087,7 @@ You can also run this application via the command line for automation. Run `pyth
             self.clear_zip_display()
 
     def on_process_error(self, err):
-        messagebox.showerror("Processing Error", str(err))
+        messagebox.showerror("Processing Error", f"An error occurred.\nDetails have been written to the log.\n\nError: {err}")
         self.btn_process.config(state=tk.NORMAL, text="PROCESS")
         self.update_nav_buttons()
 
@@ -954,14 +1148,17 @@ def run_cli():
 
         # Validate post-action move requirement
         if config.get('post_action') == 'move' and not config.get('target_zip_folder'):
-            print("  Error: Post action is 'move' but no Processed Folder specified. Skipping.")
+            error_msg = "Post action is 'move' but no Processed Folder specified. Skipping."
+            print(f"  Error: {error_msg}")
+            core.write_log("ERROR", data, config, [], error_msg)
             continue
             
         try:
             core.process_zip(data, config)
-            print("  Successfully processed.")
+            print("  Successfully processed. Actions written to log.")
         except Exception as e:
             print(f"  Error processing zip: {e}")
+            # Core already handles the ERROR logging for exceptions
 
 # --------------------------------------------------------------------------- #
 # MAIN ENTRY POINT

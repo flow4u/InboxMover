@@ -1,10 +1,6 @@
-# **Inbox Mover \- the perfect FileButler companion (v0.6)**
+# **Inbox Mover \- the perfect FileButler companion (v0.7)**
 
-**Inbox Mover** is a cross-platform utility designed to process Transfer- folders typically found in myDRE i: and z:\\inobox. 
-
-**Inbox Mover** processes files in these folders into a designated target folder while automatically resolving file conflicts based on your preferences. It features both a user-friendly Material-inspired graphical interface (GUI) and a Command-Line Interface (CLI) for automation.
-
-**Inbox Mover** is optimized to process ZIP files uploaded with myDRE FileButler (typically containing a receipt.json file).
+**Inbox Mover** is a cross-platform utility designed to process and extract ZIP files (typically containing a receipt.json file) into a designated target folder while automatically resolving file conflicts based on your preferences. It features both a user-friendly Material-inspired graphical interface (GUI) and a Command-Line Interface (CLI) for automation.
 
 ## **🛠️ Prerequisites**
 
@@ -45,7 +41,7 @@ Because Inbox Mover is a standalone script, "installing" it just means placing i
 1. Extract the ZIP file containing inbox\_mover.py.  
 2. You can place it in your \~/Desktop directory or in a shared location like /opt/InboxMover if multiple users need access.
 
-*Note: The application will automatically create a permit\_configs folder in the same directory as the script to save your settings.*
+*Note: The application will automatically create a permit\_configs folder in the same directory as the script to save your settings and logs.*
 
 ## **🖱️ How to Use (GUI Mode)**
 
@@ -62,7 +58,7 @@ To launch the graphical interface, double-click the shortcut you created on your
 
 * Use the **'⇦ Prev'** and **'Next ⇨'** buttons (or your keyboard's Left/Right arrow keys) to cycle through the found transfer folders.  
 * Click **'↻ Refresh'** to manually rescan the Search Folders for new or modified transfer folders.  
-* Use the **"Open"** buttons next to directory paths to quickly view those locations in your native file explorer.
+* Use the **"Open Folder"** button to quickly view the selected transfer- folder in your native file explorer.
 
 ### **3\. Conflict Resolution (If a file already exists)**
 
@@ -86,6 +82,7 @@ The application reads the receipt.json file inside the ZIP to identify a **Confi
 
 ### **6\. Advanced Features**
 
+* **Audit Logging:** Every processed file, resolved conflict, and post-action move is written to a machine-readable JSONL file. Click **'📄 View Log'** in the top bar to inspect exactly what the application has done, or click **'📂 Log Folder'** to open the directory containing your logs and configurations.  
 * **Receipt.json Overrides:** If the receipt.json contains specific settings keys (target\_folder, process\_folder, receipt\_folder, conflict\_resolution, post\_processing) with non-empty values, these will automatically override your GUI settings. The "Save Config" button will turn orange to notify you of unsaved changes forced by the receipt.  
 * **Absolute Path Extraction:** If a file compressed within the ZIP archive contains an absolute path (e.g., C:\\reports\\data.csv or /var/log/app.log), the app will bypass the "Target Folder" setting entirely and extract that specific file to its absolute path, creating necessary parent directories automatically.
 
@@ -107,4 +104,4 @@ python inbox\_mover.py \--cli \-s \<search\_folder\_1\> \<search\_folder\_2\> \-
 * \-c, \--conflict-action: Action when extracted file already exists. Choices: overwrite, keep\_both, rename\_existing (Default: overwrite).  
 * \-p, \--post-action: Action to perform after extraction. Choices: leave, delete, move (Default: leave).
 
-*Note: If a saved configuration exists for a Config ID found during a CLI run (or if the receipt.json dictates an override), the script will prioritize those specific settings over the standard CLI arguments.*
+*Note: CLI actions are also fully logged to process\_log.jsonl.*
