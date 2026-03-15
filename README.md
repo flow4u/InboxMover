@@ -6,6 +6,8 @@
 
 **Inbox Mover** is optimized to use the **receipt.json** in **myDRE FileButler.**
 
+![Inbox Mover Screenshot](./FileButler.png)
+
 ## **🛠️ Prerequisites**
 
 To run Inbox Mover, you need **Python 3** installed on your system. The application uses Python's built-in libraries, including tkinter for the GUI, meaning no external packages (via pip) are required.
