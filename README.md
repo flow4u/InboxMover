@@ -1,6 +1,10 @@
 # **Inbox Mover \- the perfect FileButler companion (v0.7)**
 
-**Inbox Mover** is a cross-platform utility designed to process and extract ZIP files (typically containing a receipt.json file) into a designated target folder while automatically resolving file conflicts based on your preferences. It features both a user-friendly Material-inspired graphical interface (GUI) and a Command-Line Interface (CLI) for automation.
+**Inbox Mover** is a cross-platform utility designed to process files in the *transfer-* folders found on i: and z:\inbox on [**myDRE**](https://mydre.org). 
+
+**Inbox Mover** processes the files into a designated target folder while automatically resolving file conflicts based on your preferences. Zip-files will be automatically extracted. It features both a user-friendly Material-inspired graphical interface (GUI) and a Command-Line Interface (CLI) for automation.
+
+**Inbox Mover** is optimized to use the *receipt.json* in **myDRE FileButler**.
 
 ![Screenshot Inbox Mover](./FileButler.png)
 
