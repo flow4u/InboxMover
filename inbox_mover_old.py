@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Inbox Mover v0.9
+Inbox Mover v0.8
 the perfect FileButler companion
 A utility to process and extract zip files containing a receipt.json,
 with both a Material-inspired GUI and a CLI mode.
@@ -17,17 +17,16 @@ import argparse
 import threading
 import subprocess
 import getpass
-import re
 
 # Tkinter imports
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
-VERSION = "0.9"
+VERSION = "0.8"
 CONFIG_DIR = "permit_configs"
 
 # --------------------------------------------------------------------------- #
-# CORE LOGIC (Untouched)
+# CORE LOGIC
 # --------------------------------------------------------------------------- #
 
 class InboxMoverCore:
@@ -47,7 +46,7 @@ class InboxMoverCore:
                     return json.load(f)
             except Exception:
                 pass
-        return {"dark_mode": True, "font_size": 11, "window_geometry": "1100x950", "search_folder_1": "", "search_folder_2": ""}
+        return {"dark_mode": True, "font_size": 10, "window_geometry": "800x650", "search_folder_1": "", "search_folder_2": ""}
 
     def save_app_settings(self, settings):
         settings_path = os.path.join(CONFIG_DIR, "app_settings.json")
@@ -59,6 +58,7 @@ class InboxMoverCore:
         folders_data = []
         seen_paths = set()
         
+        # Allow passing a single string instead of a list for convenience
         if isinstance(search_folders, str):
             search_folders = [search_folders]
 
@@ -74,6 +74,7 @@ class InboxMoverCore:
                         folder_data = self.inspect_transfer_folder(item_path)
                         folders_data.append(folder_data)
         
+        # Sort to ensure consistent navigation order in descending order
         folders_data.sort(key=lambda x: x['folder_name'], reverse=True)
         return folders_data
 
@@ -97,6 +98,7 @@ class InboxMoverCore:
                 if file.lower().endswith('.zip'):
                     zip_path = os.path.join(root, file)
                     zip_info = self.inspect_zip(zip_path)
+                    # Only treat as a valid zip if it actually contains the receipt.json
                     if zip_info and zip_info.get("receipt_raw"):
                         data["zip_path"] = zip_path
                         data["permitId"] = zip_info["permitId"]
@@ -134,6 +136,7 @@ class InboxMoverCore:
         }
         try:
             with zipfile.ZipFile(zip_path, 'r') as zf:
+                # Look for receipt.json anywhere in the zip structure
                 receipt_filename = next((f for f in zf.namelist() if f.endswith('receipt.json')), None)
                 if receipt_filename:
                     with zf.open(receipt_filename) as f:
@@ -147,7 +150,7 @@ class InboxMoverCore:
                             pass
                 return data
         except zipfile.BadZipFile:
-            return None
+            return None # Skip invalid zips
         except Exception as e:
             print(f"Error inspecting {zip_path}: {e}")
             return None
@@ -192,24 +195,29 @@ class InboxMoverCore:
         except Exception as e:
             print(f"Failed to write log: {e}")
             
+        # Local Logging "Inbox Process.log"
         post_action = config.get('post_action', 'leave') if config else 'leave'
         target_local_dir = None
         
         if post_action == 'leave':
             target_local_dir = folder_data.get('folder_path')
         elif post_action == 'move':
+            # Look for the move destination in the actions list
             for act in actions:
                 if act.get('type') == 'post_processing' and act.get('destination') not in ('DELETED', ''):
                     target_local_dir = act.get('destination')
                     break
+            # Fallback to original path if move hasn't happened yet (e.g., error during extraction)
             if not target_local_dir:
                 target_local_dir = folder_data.get('folder_path')
         elif post_action == 'delete' and status != 'SUCCESS':
+            # If delete failed or error happened before delete, write to original folder
             target_local_dir = folder_data.get('folder_path')
             
         if target_local_dir and os.path.isdir(target_local_dir):
             local_log_path = os.path.join(target_local_dir, "Inbox Process.log")
             
+            # Create a human readable format
             ts = log_entry["timestamp"].replace("T", " ")[:19]
             lines = [f"[{ts}] {status} | User: {log_entry['user']} | Config: {log_entry['config_id']} | Folder: {log_entry['folder_name']}"]
             if message:
@@ -239,10 +247,11 @@ class InboxMoverCore:
                         
                 try:
                     with open(local_log_path, 'w', encoding='utf-8') as f:
-                        f.write(new_log_text + existing_content)
+                        f.write(new_log_text + existing_content) # Prepend new data
                 except Exception as e:
                     print(f"Failed to write local log: {e}")
 
+        # Append to timestamped receipt.json
         for act in actions:
             dest = act.get("destination", "")
             if isinstance(dest, str) and dest.lower().endswith("receipt.json") and os.path.exists(dest):
@@ -251,19 +260,27 @@ class InboxMoverCore:
                         try:
                             receipt_data = json.load(f)
                         except json.JSONDecodeError:
+                            # Fallback if the original receipt was empty or invalid JSON
                             receipt_data = {"_raw_file_unparsable": True}
                     
+                    # Create the logs array if it doesn't exist yet
                     if "processing_logs" not in receipt_data:
                         receipt_data["processing_logs"] = []
                         
+                    # Append the structured log entry
                     receipt_data["processing_logs"].append(log_entry)
                     
+                    # Write the updated JSON back to the file
                     with open(dest, 'w', encoding='utf-8') as f:
                         json.dump(receipt_data, f, indent=4)
                 except Exception as e:
                     print(f"Failed to update receipt.json with processing log: {e}")
 
     def process_zip(self, folder_data, config, progress_callback=None):
+        """
+        Extract the zip and apply conflict resolution and post-processing.
+        config requires: target_folder, conflict_action, post_action, target_zip_folder
+        """
         target_folder = config.get('target_folder')
         conflict_action = config.get('conflict_action', 'overwrite')
         post_action = config.get('post_action', 'leave')
@@ -355,6 +372,7 @@ class InboxMoverCore:
                 for i, zinfo in enumerate(file_list):
                     original_name = zinfo.filename
                     
+                    # Determine if the path inside the zip is absolute
                     is_absolute = original_name.startswith('/') or original_name.startswith('\\') or (len(original_name) >= 3 and original_name[1] == ':' and original_name[2] in ('/', '\\'))
                     
                     if original_name.lower().endswith('receipt.json'):
@@ -412,6 +430,7 @@ class InboxMoverCore:
                                 "destination": final_path
                             })
 
+            # Post Processing
             if post_action == 'delete':
                 folder_path = folder_data.get('folder_path')
                 if folder_path and os.path.isdir(folder_path):
@@ -429,6 +448,7 @@ class InboxMoverCore:
                 folder_name = folder_data.get('folder_name')
                 dest_path = os.path.join(target_zip_folder, folder_name)
                 
+                # handle if folder already exists in target zip folder
                 if os.path.exists(dest_path):
                     counter = 1
                     while os.path.exists(f"{dest_path}_{counter}"):
@@ -441,6 +461,7 @@ class InboxMoverCore:
                     "source": folder_path,
                     "destination": dest_path
                 })
+            # 'leave' does nothing
 
             self.write_log("SUCCESS", folder_data, config, actions_log, "Successfully processed folder.")
 
@@ -448,24 +469,29 @@ class InboxMoverCore:
             self.write_log("ERROR", folder_data, config, actions_log, str(e))
             raise e
 
-
 # --------------------------------------------------------------------------- #
-# REDESIGNED GUI APPLICATION
+# GUI APPLICATION
 # --------------------------------------------------------------------------- #
 
 class InboxMoverGUI:
     def __init__(self, root):
         self.root = root
         self.root.title(f"Inbox Mover v{VERSION} - the perfect FileButler companion")
-        self.root.minsize(900, 850)
+        self.root.minsize(700, 600)
+        self.root.resizable(True, True)
         
         self.core = InboxMoverCore()
+        
+        # Load app settings
         settings = self.core.load_app_settings()
         self.is_dark_mode = settings.get("dark_mode", True)
-        self.base_font_size = settings.get("font_size", 11)
+        self.base_font_size = settings.get("font_size", 10)
         
-        window_geometry = settings.get("window_geometry", "1100x950")
+        # Apply saved geometry or default
+        window_geometry = settings.get("window_geometry", "800x650")
         self.root.geometry(window_geometry)
+        
+        # Intercept window close to save settings (including geometry)
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         
         self.folders_data = []
@@ -474,8 +500,11 @@ class InboxMoverGUI:
         # Variables
         sf1 = settings.get("search_folder_1", settings.get("search_folder", ""))
         sf2 = settings.get("search_folder_2", "")
-        if not sf1: sf1 = "i:/"
-        if not sf2: sf2 = "z:/inbox"
+        
+        if not sf1:
+            sf1 = "i:/"
+        if not sf2:
+            sf2 = "z:/inbox"
 
         self.search_folder_1_var = tk.StringVar(value=sf1)
         self.search_folder_2_var = tk.StringVar(value=sf2)
@@ -490,8 +519,8 @@ class InboxMoverGUI:
         self.zip_name_var = tk.StringVar(value="No Transfer Folders Found")
         self.permit_id_var = tk.StringVar(value="")
         self.last_processed_var = tk.StringVar(value="")
-        self.nav_count_var = tk.StringVar(value="[ 0 / 0 ]")
 
+        # Trace variables to detect unsaved changes dynamically
         self.target_folder_var.trace_add("write", self.check_unsaved_changes)
         self.target_zip_folder_var.trace_add("write", self.check_unsaved_changes)
         self.receipt_folder_var.trace_add("write", self.check_unsaved_changes)
@@ -503,163 +532,161 @@ class InboxMoverGUI:
         self.apply_fonts()
         self.bind_keys()
         
+        # Auto-load if search folders were saved
         if self.search_folder_1_var.get() or self.search_folder_2_var.get():
             self.on_search_folder_changed(startup=True)
 
     def setup_ui(self):
-        self.main_frame = ttk.Frame(self.root, padding=20)
-        self.main_frame.pack(fill=tk.BOTH, expand=True)
+        # Configure main padding
+        main_frame = ttk.Frame(self.root, padding="15")
+        main_frame.pack(fill=tk.BOTH, expand=True)
 
-        # --- HEADER ---
-        header_frame = ttk.Frame(self.main_frame)
-        header_frame.pack(fill=tk.X, pady=(0, 15))
+        # --- Header ---
+        header_frame = ttk.Frame(main_frame)
+        header_frame.pack(fill=tk.X, pady=(0, 10))
         
         title_frame = ttk.Frame(header_frame)
         title_frame.pack(side=tk.LEFT)
+        
         self.lbl_title = ttk.Label(title_frame, text="Inbox Mover")
         self.lbl_title.pack(anchor=tk.W)
         self.lbl_version = ttk.Label(title_frame, text=f"the perfect FileButler companion - version {VERSION}")
         self.lbl_version.pack(anchor=tk.W)
         
-        tools_frame = ttk.Frame(header_frame)
-        tools_frame.pack(side=tk.RIGHT, anchor=tk.S)
-        self.theme_btn = ttk.Button(tools_frame, text="☀", width=3, command=self.toggle_theme)
+        # Header Buttons (Right aligned)
+        self.theme_btn = ttk.Button(header_frame, text="Toggle Light Mode", command=self.toggle_theme)
         self.theme_btn.pack(side=tk.RIGHT)
-        self.btn_help = ttk.Button(tools_frame, text="?", width=3, command=self.show_help)
+        
+        self.btn_help = ttk.Button(header_frame, text="? Help", width=6, command=self.show_help)
         self.btn_help.pack(side=tk.RIGHT, padx=5)
-        self.btn_clear_log = ttk.Button(tools_frame, text="🗑 Clear Log", command=self.clear_log)
+        
+        self.btn_clear_log = ttk.Button(header_frame, text="🗑 Clear Log", command=self.clear_log)
         self.btn_clear_log.pack(side=tk.RIGHT, padx=5)
-        self.btn_view_log = ttk.Button(tools_frame, text="📄 View Log", command=self.view_log)
+        
+        self.btn_view_log = ttk.Button(header_frame, text="📄 View Log", command=self.view_log)
         self.btn_view_log.pack(side=tk.RIGHT, padx=5)
-        self.btn_open_log_folder = ttk.Button(tools_frame, text="📂 Log Folder", command=self.open_log_folder)
+
+        self.btn_open_log_folder = ttk.Button(header_frame, text="📂 Log Folder", command=self.open_log_folder)
         self.btn_open_log_folder.pack(side=tk.RIGHT, padx=5)
         
-        self.btn_increase_font = ttk.Button(tools_frame, text="A+", width=3, command=self.increase_font)
+        self.btn_increase_font = ttk.Button(header_frame, text="A+", width=3, command=self.increase_font)
         self.btn_increase_font.pack(side=tk.RIGHT, padx=2)
-        self.btn_reset_view = ttk.Button(tools_frame, text="Reset View", command=self.reset_view)
-        self.btn_reset_view.pack(side=tk.RIGHT, padx=2)
-        self.btn_decrease_font = ttk.Button(tools_frame, text="A-", width=3, command=self.decrease_font)
+        self.btn_decrease_font = ttk.Button(header_frame, text="A-", width=3, command=self.decrease_font)
         self.btn_decrease_font.pack(side=tk.RIGHT, padx=2)
 
-        ttk.Separator(self.main_frame, orient='horizontal').pack(fill=tk.X, pady=(0, 15))
-
-        # --- GLOBAL DIRECTORIES ---
-        dirs_wrapper = ttk.Frame(self.main_frame)
-        dirs_wrapper.pack(fill=tk.X, pady=(0, 15))
-        self.lbl_dirs_header = ttk.Label(dirs_wrapper, text="Global Directories", style="Header.TLabel")
-        self.lbl_dirs_header.pack(anchor=tk.W, pady=(0, 10))
+        # --- Folders Section ---
+        folder_frame = ttk.LabelFrame(main_frame, text="Directories", padding="10")
+        folder_frame.pack(fill=tk.X, pady=5)
         
-        dirs_grid = ttk.Frame(dirs_wrapper)
-        dirs_grid.pack(fill=tk.X)
-        
-        self.create_folder_row(dirs_grid, "Search Folder 1:", self.search_folder_1_var, 0, self.on_search_folder_changed)
-        self.create_folder_row(dirs_grid, "Search Folder 2:", self.search_folder_2_var, 1, self.on_search_folder_changed)
-        self.create_folder_row(dirs_grid, "Target Folder:", self.target_folder_var, 2)
-        self.create_folder_row(dirs_grid, "Processed Folder:", self.target_zip_folder_var, 3)
-        self.create_folder_row(dirs_grid, "Receipt Folder:", self.receipt_folder_var, 4)
+        self.create_folder_row(folder_frame, "Search Folder 1:", self.search_folder_1_var, 0, self.on_search_folder_changed)
+        self.create_folder_row(folder_frame, "Search Folder 2:", self.search_folder_2_var, 1, self.on_search_folder_changed)
+        self.create_folder_row(folder_frame, "Target Folder:", self.target_folder_var, 2)
+        self.create_folder_row(folder_frame, "Processed Folder:", self.target_zip_folder_var, 3)
+        self.create_folder_row(folder_frame, "Receipt Folder:", self.receipt_folder_var, 4)
 
-        # --- THE JOB CARD (Highlighted Area) ---
-        self.card_frame = ttk.Frame(self.main_frame, style="Card.TFrame", padding=20)
-        self.card_frame.pack(fill=tk.BOTH, expand=True)
-
-        # Card Top Bar (Navigation & Utils)
-        card_top = ttk.Frame(self.card_frame, style="Card.TFrame")
-        card_top.pack(fill=tk.X, pady=(0, 10))
+        # --- Navigation & Process Section ---
+        nav_frame = ttk.Frame(main_frame)
+        nav_frame.pack(fill=tk.X, pady=15)
         
-        nav_controls = ttk.Frame(card_top, style="Card.TFrame")
-        nav_controls.pack(side=tk.LEFT)
-        self.btn_refresh = ttk.Button(nav_controls, text="↻ Refresh", command=self.on_search_folder_changed)
-        self.btn_refresh.pack(side=tk.LEFT, padx=(0, 5))
-        self.btn_prev = ttk.Button(nav_controls, text="⇦ Prev", width=8, command=self.prev_zip)
+        # Nav Buttons
+        nav_btns = ttk.Frame(nav_frame)
+        nav_btns.pack(side=tk.LEFT)
+        
+        self.btn_refresh = ttk.Button(nav_btns, text="↻ Refresh", width=10, command=self.on_search_folder_changed)
+        self.btn_refresh.pack(side=tk.LEFT, padx=2)
+        
+        self.btn_prev = ttk.Button(nav_btns, text="⇦ Prev", width=8, command=self.prev_zip)
         self.btn_prev.pack(side=tk.LEFT, padx=2)
-        self.lbl_nav_count = ttk.Label(nav_controls, textvariable=self.nav_count_var, style="Card.TLabel")
-        self.lbl_nav_count.pack(side=tk.LEFT, padx=10)
-        self.btn_next = ttk.Button(nav_controls, text="Next ⇨", width=8, command=self.next_zip)
+        self.btn_process = ttk.Button(nav_btns, text="PROCESS", width=12, command=self.process_current_zip)
+        self.btn_process.pack(side=tk.LEFT, padx=2)
+        self.btn_next = ttk.Button(nav_btns, text="Next ⇨", width=8, command=self.next_zip)
         self.btn_next.pack(side=tk.LEFT, padx=2)
 
-        utils_controls = ttk.Frame(card_top, style="Card.TFrame")
-        utils_controls.pack(side=tk.RIGHT)
-        self.btn_open_local_log = ttk.Button(utils_controls, text="📄 Process Log", command=self.open_local_log)
-        self.btn_open_folder = ttk.Button(utils_controls, text="📂 Open Folder", command=self.open_current_folder)
-        # Packed dynamically in update_nav_buttons
-
-        # Card Info
-        card_info = ttk.Frame(self.card_frame, style="Card.TFrame")
-        card_info.pack(fill=tk.X, pady=(5, 15))
-        self.lbl_zip_name = ttk.Label(card_info, textvariable=self.zip_name_var, style="CardTitle.TLabel")
-        self.lbl_zip_name.pack(anchor=tk.W)
-        self.lbl_permit_id = ttk.Label(card_info, textvariable=self.permit_id_var, style="Card.TLabel")
-        self.lbl_permit_id.pack(anchor=tk.W, pady=(5, 0))
-        self.lbl_inbox_name = ttk.Label(card_info, textvariable=self.inbox_name_var, style="CardDim.TLabel")
+        # Info Labels
+        info_frame = ttk.Frame(nav_frame)
+        info_frame.pack(side=tk.LEFT, padx=30, expand=True, fill=tk.X)
+        self.lbl_inbox_name = ttk.Label(info_frame, textvariable=self.inbox_name_var)
         self.lbl_inbox_name.pack(anchor=tk.W)
-        self.lbl_last_processed = ttk.Label(card_info, textvariable=self.last_processed_var, style="CardAccent.TLabel")
-        self.lbl_last_processed.pack(anchor=tk.W, pady=(5, 0))
+        self.lbl_zip_name = ttk.Label(info_frame, textvariable=self.zip_name_var)
+        self.lbl_zip_name.pack(anchor=tk.W)
+        self.lbl_permit_id = ttk.Label(info_frame, textvariable=self.permit_id_var)
+        self.lbl_permit_id.pack(anchor=tk.W)
+        self.lbl_last_processed = ttk.Label(info_frame, textvariable=self.last_processed_var)
+        self.lbl_last_processed.pack(anchor=tk.W, pady=(2, 0))
 
-        # Card Options
-        card_options = ttk.Frame(self.card_frame, style="Card.TFrame")
-        card_options.pack(fill=tk.X, pady=(0, 15))
+        # Config Save and Open Folder
+        actions_frame = ttk.Frame(nav_frame)
+        actions_frame.pack(side=tk.RIGHT, padx=5)
         
-        conflict_col = ttk.Frame(card_options, style="Card.TFrame")
-        conflict_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        ttk.Label(conflict_col, text="Conflict Resolution:", style="CardHeader.TLabel").pack(anchor=tk.W, pady=(0, 5))
-        ttk.Radiobutton(conflict_col, text="Overwrite existing file", variable=self.conflict_action_var, value="overwrite", style="Card.TRadiobutton").pack(anchor=tk.W)
-        ttk.Radiobutton(conflict_col, text="Keep both (add number)", variable=self.conflict_action_var, value="keep_both", style="Card.TRadiobutton").pack(anchor=tk.W)
-        ttk.Radiobutton(conflict_col, text="Rename existing file", variable=self.conflict_action_var, value="rename_existing", style="Card.TRadiobutton").pack(anchor=tk.W)
+        self.btn_open_folder = ttk.Button(actions_frame, text="Open Folder", command=self.open_current_folder)
+        self.btn_open_folder.pack(side=tk.TOP, fill=tk.X, pady=(0, 2))
+        
+        self.btn_open_local_log = ttk.Button(actions_frame, text="📄 Process Log", command=self.open_local_log)
+        # We don't pack local log button immediately, it's packed dynamically
+        
+        self.btn_save_config = ttk.Button(actions_frame, text="Save Config", command=self.save_permit_config)
+        self.btn_save_config.pack(side=tk.TOP, fill=tk.X)
 
-        post_col = ttk.Frame(card_options, style="Card.TFrame")
-        post_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        ttk.Label(post_col, text="Post Processing:", style="CardHeader.TLabel").pack(anchor=tk.W, pady=(0, 5))
-        ttk.Radiobutton(post_col, text="Leave the files in place", variable=self.post_action_var, value="leave", style="Card.TRadiobutton").pack(anchor=tk.W)
-        ttk.Radiobutton(post_col, text="Delete the files", variable=self.post_action_var, value="delete", style="Card.TRadiobutton").pack(anchor=tk.W)
-        ttk.Radiobutton(post_col, text="Move the files to Processed Folder", variable=self.post_action_var, value="move", style="Card.TRadiobutton").pack(anchor=tk.W)
+        # --- Options Section ---
+        options_frame = ttk.Frame(main_frame)
+        options_frame.pack(fill=tk.X, pady=5)
+        
+        # Conflict Options
+        conflict_frame = ttk.LabelFrame(options_frame, text="If the file already exists in the target folder then:", padding="10")
+        conflict_frame.pack(side=tk.LEFT, fill=tk.BOTH, expand=True, padx=(0, 5))
+        ttk.Radiobutton(conflict_frame, text="Overwrite existing file", variable=self.conflict_action_var, value="overwrite").pack(anchor=tk.W)
+        ttk.Radiobutton(conflict_frame, text="Keep both (add number)", variable=self.conflict_action_var, value="keep_both").pack(anchor=tk.W)
+        ttk.Radiobutton(conflict_frame, text="Rename existing file", variable=self.conflict_action_var, value="rename_existing").pack(anchor=tk.W)
 
-        # Card Text Area
-        text_wrapper = ttk.Frame(self.card_frame, style="Card.TFrame")
-        text_wrapper.pack(fill=tk.BOTH, expand=True, pady=(0, 15))
-        ttk.Label(text_wrapper, text="Source Folder Content:", style="CardHeader.TLabel").pack(anchor=tk.W, pady=(0, 5))
-        self.receipt_text = tk.Text(text_wrapper, wrap=tk.WORD, state=tk.DISABLED, relief="flat", highlightthickness=1)
-        scrollbar = ttk.Scrollbar(text_wrapper, orient=tk.VERTICAL, command=self.receipt_text.yview)
+        # Post Action Options
+        post_frame = ttk.LabelFrame(options_frame, text="After processing:", padding="10")
+        post_frame.pack(side=tk.RIGHT, fill=tk.BOTH, expand=True, padx=(5, 0))
+        ttk.Radiobutton(post_frame, text="Leave the files in place", variable=self.post_action_var, value="leave").pack(anchor=tk.W)
+        ttk.Radiobutton(post_frame, text="Delete the files", variable=self.post_action_var, value="delete").pack(anchor=tk.W)
+        ttk.Radiobutton(post_frame, text="Move the files to Processed Folder", variable=self.post_action_var, value="move").pack(anchor=tk.W)
+
+        # --- Source Folder Content Text Area ---
+        text_frame = ttk.LabelFrame(main_frame, text="Source Folder Content", padding="10")
+        text_frame.pack(fill=tk.BOTH, expand=True, pady=10)
+        
+        self.receipt_text = tk.Text(text_frame, wrap=tk.WORD, state=tk.DISABLED)
+        scrollbar = ttk.Scrollbar(text_frame, orient=tk.VERTICAL, command=self.receipt_text.yview)
         self.receipt_text.configure(yscrollcommand=scrollbar.set)
+        
         self.receipt_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-
-        # Card Bottom Bar (Actions)
-        card_actions = ttk.Frame(self.card_frame, style="Card.TFrame")
-        card_actions.pack(fill=tk.X)
-        self.btn_process = ttk.Button(card_actions, text="PROCESS FOLDER", style="Process.TButton", command=self.process_current_zip)
-        self.btn_process.pack(side=tk.RIGHT, ipady=4, ipadx=10)
-        self.btn_save_config = ttk.Button(card_actions, text="Save Config", command=self.save_permit_config)
-        self.btn_save_config.pack(side=tk.RIGHT, padx=10)
 
         self.update_nav_buttons()
 
     def create_folder_row(self, parent, label_text, str_var, row, callback=None):
-        lbl = ttk.Label(parent, text=label_text)
-        lbl.grid(row=row, column=0, sticky=tk.W, pady=4, padx=(0, 15))
-        
-        entry = ttk.Entry(parent, textvariable=str_var)
-        entry.grid(row=row, column=1, sticky=tk.EW, pady=4)
+        ttk.Label(parent, text=label_text).grid(row=row, column=0, sticky=tk.W, pady=3)
+        entry = ttk.Entry(parent, textvariable=str_var, width=50)
+        entry.grid(row=row, column=1, sticky=tk.EW, padx=5, pady=3)
         parent.columnconfigure(1, weight=1)
         
         btn_frame = ttk.Frame(parent)
-        btn_frame.grid(row=row, column=2, sticky=tk.E, pady=4, padx=(10, 0))
+        btn_frame.grid(row=row, column=2, sticky=tk.E, pady=3)
         
         def browse():
             folder = filedialog.askdirectory()
             if folder:
                 str_var.set(folder)
-                if callback: callback()
+                if callback:
+                    callback()
                     
         def open_dir():
             path = str_var.get()
             if not path or not os.path.isdir(path):
                 messagebox.showwarning("Warning", "The specified folder does not exist.")
                 return
-            if sys.platform == "win32": os.startfile(path)
-            elif sys.platform == "darwin": subprocess.call(["open", path])
-            else: subprocess.call(["xdg-open", path])
+            if sys.platform == "win32":
+                os.startfile(path)
+            elif sys.platform == "darwin":
+                subprocess.call(["open", path])
+            else:
+                subprocess.call(["xdg-open", path])
 
-        ttk.Button(btn_frame, text="Browse...", command=browse).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(btn_frame, text="Browse...", command=browse).pack(side=tk.LEFT, padx=(0, 2))
         ttk.Button(btn_frame, text="Open", width=6, command=open_dir).pack(side=tk.LEFT)
         
         if callback:
@@ -668,152 +695,91 @@ class InboxMoverGUI:
 
     def apply_fonts(self):
         style = ttk.Style()
-        base = self.base_font_size
-        font_family = "Segoe UI" if sys.platform == "win32" else "Helvetica"
+        style.configure(".", font=("Helvetica", self.base_font_size))
+        style.configure("TButton", font=("Helvetica", self.base_font_size))
+        style.configure("Accent.TButton", font=("Helvetica", self.base_font_size, "bold"))
+        style.configure("TLabelframe.Label", font=("Helvetica", self.base_font_size, "bold"))
         
-        style.configure(".", font=(font_family, base))
-        style.configure("TButton", font=(font_family, base))
-        style.configure("Accent.TButton", font=(font_family, base, "bold"))
+        self.lbl_title.config(font=("Helvetica", self.base_font_size + 14, "bold"))
+        self.lbl_version.config(font=("Helvetica", self.base_font_size, "italic"))
+        self.lbl_inbox_name.config(font=("Helvetica", self.base_font_size, "italic"))
+        self.lbl_zip_name.config(font=("Helvetica", self.base_font_size + 2, "bold"))
+        self.lbl_permit_id.config(font=("Helvetica", self.base_font_size))
+        self.lbl_last_processed.config(font=("Helvetica", self.base_font_size, "italic"))
         
-        # New styles based on dynamic sizes
-        style.configure("Header.TLabel", font=(font_family, base + 2, "bold"))
-        style.configure("CardHeader.TLabel", font=(font_family, base, "bold"))
-        style.configure("CardTitle.TLabel", font=(font_family, base + 6, "bold"))
-        style.configure("CardDim.TLabel", font=(font_family, base))
-        style.configure("CardAccent.TLabel", font=(font_family, base, "italic"))
-        style.configure("Process.TButton", font=(font_family, base + 2, "bold"))
-
-        self.lbl_title.config(font=(font_family, base + 14, "bold"))
-        self.lbl_version.config(font=(font_family, base, "italic"))
-        self.receipt_text.configure(font=("Courier", base))
+        self.receipt_text.configure(font=("Courier", self.base_font_size))
 
     def increase_font(self):
-        if self.base_font_size < 24:
+        if self.base_font_size < 30:
             self.base_font_size += 1
             self.apply_fonts()
             self.save_settings()
 
     def decrease_font(self):
-        if self.base_font_size > 8:
+        if self.base_font_size > 6:
             self.base_font_size -= 1
             self.apply_fonts()
             self.save_settings()
 
-    def reset_view(self):
-        self.base_font_size = 11
-        
-        # Force the window to un-maximize if it was maximized/fullscreen
-        try:
-            # Handle Linux (X11) zoomed state
-            if self.root.attributes('-zoomed'):
-                self.root.attributes('-zoomed', False)
-        except Exception:
-            pass
-            
-        try:
-            # Handle Windows/Mac normal state
-            self.root.state('normal')
-        except Exception:
-            pass
-            
-        # Aggressive resize: Temporarily restrict min/max size to force the OS 
-        # Window Manager to strictly respect the new dimensions, even if manually resized.
-        self.root.minsize(1100, 950)
-        self.root.maxsize(1100, 950)
-        
-        self.root.geometry("1100x950")
-        self.root.update_idletasks() # Force UI to process the forced dimensions
-        
-        # Restore standard resizability boundaries
-        self.root.minsize(900, 850)
-        screen_w = self.root.winfo_screenwidth()
-        screen_h = self.root.winfo_screenheight()
-        self.root.maxsize(screen_w, screen_h)
-        
-        self.apply_fonts()
-        self.save_settings()
-
     def apply_theme(self):
         style = ttk.Style(self.root)
-        style.theme_use('clam')
+        style.theme_use('clam') # Clean base theme
         
         if self.is_dark_mode:
+            self.root.configure(bg="#1e1e1e")
             bg_color = "#1e1e1e"
-            card_bg = "#252526"
-            fg_color = "#cccccc"
-            fg_dim = "#999999"
-            fg_accent = "#60a5fa"
-            btn_bg = "#333333"
-            btn_active = "#444444"
-            entry_bg = "#3c3c3c"
-            entry_border = "#444444"
+            fg_color = "#ffffff"
+            frame_bg = "#2d2d2d"
+            btn_bg = "#3a3a3a"
+            btn_fg = "#ffffff"
+            btn_active = "#505050"
+            entry_bg = "#333333"
+            entry_fg = "#ffffff"
             text_bg = "#1e1e1e"
             
-            accent_bg = "#d97706" # Amber
-            accent_active = "#f59e0b"
+            accent_bg = "#d97706" # Material Amber 600
+            accent_fg = "#ffffff"
+            accent_active = "#f59e0b" # Material Amber 500
             
-            process_bg = "#10b981" # Emerald Green
-            process_active = "#059669"
-            process_fg = "#ffffff"
-            
-            self.root.configure(bg=bg_color)
-            self.theme_btn.config(text="☀")
+            self.theme_btn.config(text="☀ Light Mode")
         else:
-            bg_color = "#f3f4f6"
-            card_bg = "#ffffff"
-            fg_color = "#111827"
-            fg_dim = "#6b7280"
-            fg_accent = "#2563eb"
-            btn_bg = "#e5e7eb"
-            btn_active = "#d1d5db"
+            self.root.configure(bg="#f0f0f0")
+            bg_color = "#f0f0f0"
+            fg_color = "#000000"
+            frame_bg = "#ffffff"
+            btn_bg = "#e0e0e0"
+            btn_fg = "#000000"
+            btn_active = "#d0d0d0"
             entry_bg = "#ffffff"
-            entry_border = "#d1d5db"
-            text_bg = "#f9fafb"
+            entry_fg = "#000000"
+            text_bg = "#ffffff"
             
-            accent_bg = "#f59e0b"
-            accent_active = "#d97706"
+            accent_bg = "#f59e0b" # Material Amber 500
+            accent_fg = "#ffffff"
+            accent_active = "#d97706" # Material Amber 600
             
-            process_bg = "#10b981"
-            process_active = "#059669"
-            process_fg = "#ffffff"
-            
-            self.root.configure(bg=bg_color)
-            self.theme_btn.config(text="☾")
+            self.theme_btn.config(text="☾ Dark Mode")
 
-        # Global Config
+        # Configure TTK styles
         style.configure(".", background=bg_color, foreground=fg_color, fieldbackground=entry_bg)
         style.configure("TFrame", background=bg_color)
-        style.configure("TSeparator", background=entry_border)
+        style.configure("TLabelframe", background=bg_color, foreground=fg_color)
+        style.configure("TLabelframe.Label", background=bg_color, foreground=fg_color)
+        style.configure("TButton", background=btn_bg, foreground=btn_fg, padding=5, borderwidth=0)
+        style.map("TButton", background=[('active', btn_active)])
         
-        # Standard Buttons
-        style.configure("TButton", background=btn_bg, foreground=fg_color, padding=5, borderwidth=0)
-        style.map("TButton", background=[('active', btn_active), ('disabled', bg_color)], foreground=[('disabled', fg_dim)])
-        
-        # Action Buttons
-        style.configure("Accent.TButton", background=accent_bg, foreground="#ffffff", padding=5, borderwidth=0)
+        style.configure("Accent.TButton", background=accent_bg, foreground=accent_fg, padding=5, borderwidth=0)
         style.map("Accent.TButton", background=[('active', accent_active)])
         
-        style.configure("Process.TButton", background=process_bg, foreground=process_fg, borderwidth=0)
-        style.map("Process.TButton", background=[('active', process_active), ('disabled', btn_bg)], foreground=[('disabled', fg_dim)])
-
-        # Card Styles
-        style.configure("Card.TFrame", background=card_bg)
-        style.configure("Card.TLabel", background=card_bg, foreground=fg_color)
-        style.configure("CardHeader.TLabel", background=card_bg, foreground=fg_color)
-        style.configure("CardTitle.TLabel", background=card_bg, foreground=fg_color)
-        style.configure("CardDim.TLabel", background=card_bg, foreground=fg_dim)
-        style.configure("CardAccent.TLabel", background=card_bg, foreground=fg_accent)
-        style.configure("Card.TRadiobutton", background=card_bg, foreground=fg_color)
-        style.map("Card.TRadiobutton", background=[('active', card_bg)])
-
-        # Entries and Texts
-        style.configure("TEntry", fieldbackground=entry_bg, foreground=fg_color, bordercolor=entry_border, lightcolor=entry_border, darkcolor=entry_border)
-        self.receipt_text.configure(bg=text_bg, fg=fg_color, insertbackground=fg_color, highlightbackground=entry_border, highlightcolor=entry_border)
+        style.configure("TRadiobutton", background=bg_color, foreground=fg_color)
+        style.configure("TEntry", fieldbackground=entry_bg, foreground=entry_fg)
+        
+        # Standard TK widgets
+        self.receipt_text.configure(bg=text_bg, fg=fg_color, insertbackground=fg_color)
 
     def toggle_theme(self):
         self.is_dark_mode = not self.is_dark_mode
         self.apply_theme()
-        self.apply_fonts() # Reapply to ensure dynamic font mapping sticks
         self.save_settings()
 
     def save_settings(self):
@@ -833,41 +799,49 @@ class InboxMoverGUI:
         log_dir = os.path.abspath(CONFIG_DIR)
         if not os.path.exists(log_dir):
             os.makedirs(log_dir)
-        if sys.platform == "win32": os.startfile(log_dir)
-        elif sys.platform == "darwin": subprocess.call(["open", log_dir])
-        else: subprocess.call(["xdg-open", log_dir])
+            
+        if sys.platform == "win32":
+            os.startfile(log_dir)
+        elif sys.platform == "darwin":
+            subprocess.call(["open", log_dir])
+        else:
+            subprocess.call(["xdg-open", log_dir])
 
     def view_log(self):
         if not os.path.exists(self.core.log_file):
             messagebox.showinfo("Log Empty", "No log file has been created yet.")
             return
             
+        # Create a modal window
         log_win = tk.Toplevel(self.root)
         log_win.title("Processing Log")
         log_win.geometry("900x600")
         log_win.transient(self.root)
         log_win.grab_set()
+        
+        # Match root background
         log_win.configure(bg=self.root.cget("bg"))
         
         frame = ttk.Frame(log_win, padding="15")
         frame.pack(fill=tk.BOTH, expand=True)
         
-        text_widget = tk.Text(frame, wrap=tk.WORD, font=("Courier", self.base_font_size), relief="flat", highlightthickness=1)
+        text_widget = tk.Text(frame, wrap=tk.WORD, font=("Courier", self.base_font_size))
         scrollbar = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=text_widget.yview)
         text_widget.configure(yscrollcommand=scrollbar.set)
         
         if self.is_dark_mode:
-            text_widget.configure(bg="#1e1e1e", fg="#ffffff", insertbackground="#ffffff", highlightbackground="#444444")
+            text_widget.configure(bg="#1e1e1e", fg="#ffffff", insertbackground="#ffffff")
         else:
-            text_widget.configure(bg="#f9fafb", fg="#000000", insertbackground="#000000", highlightbackground="#d1d5db")
+            text_widget.configure(bg="#ffffff", fg="#000000", insertbackground="#000000")
             
         text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        text_widget.tag_configure("success", foreground="#10b981")
-        text_widget.tag_configure("error", foreground="#ef4444")
+        # Color tags for formatting
+        text_widget.tag_configure("success", foreground="#10b981") # Green
+        text_widget.tag_configure("error", foreground="#ef4444") # Red
         text_widget.tag_configure("header", font=("Courier", self.base_font_size, "bold"))
-        text_widget.tag_configure("info", foreground="#60a5fa" if self.is_dark_mode else "#2563eb")
+        text_widget.tag_configure("info", foreground="#3b82f6" if not self.is_dark_mode else "#60a5fa") # Blue
         
         try:
             with open(self.core.log_file, 'r', encoding='utf-8') as f:
@@ -876,8 +850,10 @@ class InboxMoverGUI:
             if not lines:
                 text_widget.insert(tk.END, "Log file is currently empty.")
             else:
+                # Read log lines in reverse order (newest first)
                 for line in reversed(lines):
-                    if not line.strip(): continue
+                    if not line.strip(): 
+                        continue
                     try:
                         entry = json.loads(line)
                         ts = entry.get("timestamp", "").replace("T", " ")[:19]
@@ -890,7 +866,9 @@ class InboxMoverGUI:
                         head_str = f"[{ts}] {status} | User: {user} | Config: {cfg} | Folder: {folder}\n"
                         status_tag = "success" if status == "SUCCESS" else ("error" if status == "ERROR" else "header")
                         text_widget.insert(tk.END, head_str, status_tag)
-                        if msg: text_widget.insert(tk.END, f"  Message: {msg}\n")
+                        
+                        if msg:
+                            text_widget.insert(tk.END, f"  Message: {msg}\n")
                         
                         actions = entry.get("actions", [])
                         if actions:
@@ -900,76 +878,30 @@ class InboxMoverGUI:
                                 a_src = act.get("source", "")
                                 a_dest = act.get("destination", "")
                                 a_msg = act.get("message", "")
+                                
                                 if a_type == "CONFLICT_RESOLVED":
                                     text_widget.insert(tk.END, f"    - CONFLICT: {a_src} -> {a_msg}\n", "info")
                                 else:
                                     text_widget.insert(tk.END, f"    - {a_type}: {a_src} -> {a_dest}\n")
+                                    
                         text_widget.insert(tk.END, "-" * 80 + "\n\n")
                     except json.JSONDecodeError:
                         text_widget.insert(tk.END, f"Failed to parse line: {line}\n", "error")
+                        
         except Exception as e:
             text_widget.insert(tk.END, f"Error reading log file: {e}\n", "error")
             
         text_widget.config(state=tk.DISABLED)
-        ttk.Button(log_win, text="Close", command=log_win.destroy, width=15).pack(pady=(10, 0))
-
-    def open_local_log(self):
-        if self.current_index < 0 or not self.folders_data: return
-        folder_path = self.folders_data[self.current_index].get('folder_path')
-        if not folder_path or not os.path.isdir(folder_path): return
-            
-        local_log_path = os.path.join(folder_path, "Inbox Process.log")
-        if not os.path.exists(local_log_path): return
-
-        log_win = tk.Toplevel(self.root)
-        log_win.title("Local Process Log")
-        log_win.geometry("900x600")
-        log_win.transient(self.root)
-        log_win.grab_set()
-        log_win.configure(bg=self.root.cget("bg"))
         
-        frame = ttk.Frame(log_win, padding="15")
-        frame.pack(fill=tk.BOTH, expand=True)
-        
-        text_widget = tk.Text(frame, wrap=tk.WORD, font=("Courier", self.base_font_size), relief="flat", highlightthickness=1)
-        scrollbar = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=text_widget.yview)
-        text_widget.configure(yscrollcommand=scrollbar.set)
-        
-        if self.is_dark_mode:
-            text_widget.configure(bg="#1e1e1e", fg="#ffffff", insertbackground="#ffffff", highlightbackground="#444444")
-        else:
-            text_widget.configure(bg="#f9fafb", fg="#000000", insertbackground="#000000", highlightbackground="#d1d5db")
-            
-        text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
-        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
-        
-        text_widget.tag_configure("success", foreground="#10b981")
-        text_widget.tag_configure("error", foreground="#ef4444")
-        text_widget.tag_configure("header", font=("Courier", self.base_font_size, "bold"))
-        text_widget.tag_configure("info", foreground="#60a5fa" if self.is_dark_mode else "#2563eb")
-        
-        try:
-            with open(local_log_path, 'r', encoding='utf-8') as f:
-                lines = f.readlines()
-            if not lines:
-                text_widget.insert(tk.END, "Log file is currently empty.")
-            else:
-                for line in lines:
-                    if line.startswith("[") and "SUCCESS" in line: text_widget.insert(tk.END, line, "success")
-                    elif line.startswith("[") and "ERROR" in line: text_widget.insert(tk.END, line, "error")
-                    elif line.startswith("["): text_widget.insert(tk.END, line, "header")
-                    elif "CONFLICT" in line: text_widget.insert(tk.END, line, "info")
-                    else: text_widget.insert(tk.END, line)
-        except Exception as e:
-            text_widget.insert(tk.END, f"Error reading log file: {e}\n", "error")
-            
-        text_widget.config(state=tk.DISABLED)
-        ttk.Button(log_win, text="Close", command=log_win.destroy, width=15).pack(pady=(10, 0))
+        # Close button at bottom
+        btn_close = ttk.Button(log_win, text="Close", command=log_win.destroy, width=15)
+        btn_close.pack(pady=(0, 15))
 
     def clear_log(self):
         if not os.path.exists(self.core.log_file):
             messagebox.showinfo("Log Empty", "The log file is already empty.")
             return
+            
         if messagebox.askyesno("Confirm Clear Log", "Are you sure you want to permanently delete all processing logs?"):
             try:
                 open(self.core.log_file, 'w').close()
@@ -980,103 +912,67 @@ class InboxMoverGUI:
     def show_help(self):
         help_win = tk.Toplevel(self.root)
         help_win.title("Inbox Mover - Help")
-        help_win.geometry("850x700")
+        help_win.geometry("650x550")
+        help_win.minsize(500, 400)
+        
+        # Match root background
         help_win.configure(bg=self.root.cget("bg"))
         
-        frame = ttk.Frame(help_win, padding="20")
+        frame = ttk.Frame(help_win, padding="15")
         frame.pack(fill=tk.BOTH, expand=True)
         
-        font_family = "Segoe UI" if sys.platform == "win32" else "Helvetica"
-        base = self.base_font_size
-        
-        help_text = tk.Text(frame, wrap=tk.WORD, relief="flat", highlightthickness=1, padx=15, pady=15)
+        help_text = tk.Text(frame, wrap=tk.WORD, font=("Helvetica", self.base_font_size))
         scrollbar = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=help_text.yview)
         help_text.configure(yscrollcommand=scrollbar.set)
         
         if self.is_dark_mode:
-            help_text.configure(bg="#1e1e1e", fg="#cccccc", insertbackground="#ffffff", highlightbackground="#444444")
-            code_bg = "#333333"
-            code_fg = "#60a5fa"
-            header_fg = "#ffffff"
+            help_text.configure(bg="#1e1e1e", fg="#ffffff", insertbackground="#ffffff")
         else:
-            help_text.configure(bg="#f9fafb", fg="#111827", insertbackground="#000000", highlightbackground="#d1d5db")
-            code_bg = "#e5e7eb"
-            code_fg = "#2563eb"
-            header_fg = "#000000"
+            help_text.configure(bg="#ffffff", fg="#000000", insertbackground="#000000")
             
         help_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
         
-        # Configure Markdown Tags
-        help_text.tag_configure("h1", font=(font_family, base + 8, "bold"), spacing1=15, spacing3=10, foreground=header_fg)
-        help_text.tag_configure("h2", font=(font_family, base + 4, "bold"), spacing1=15, spacing3=5, foreground=header_fg)
-        help_text.tag_configure("bold", font=(font_family, base, "bold"))
-        help_text.tag_configure("bullet", lmargin1=20, lmargin2=35, spacing1=3, spacing3=3)
-        help_text.tag_configure("code", font=("Courier", base), background=code_bg, foreground=code_fg)
-        help_text.tag_configure("normal", font=(font_family, base), spacing1=3, spacing3=3)
-        
-        instructions = """# Inbox Mover - User Instructions
+        instructions = """INBOX MOVER - USER INSTRUCTIONS
 
-## Overview
-Inbox Mover processes ZIP files (typically containing a `receipt.json`) by extracting them into a designated target folder while resolving file conflicts automatically.
+OVERVIEW
+Inbox Mover processes ZIP files (typically containing a receipt.json) by extracting them into a designated target folder while resolving file conflicts automatically.
 
-## 1. Directories
-* **Search Folder 1 & 2:** The root directories where the app looks for child folders starting with `transfer-`. You can specify up to two search locations.
-* **Target Folder:** The directory where the contents of the ZIP will be extracted.
-* **Processed Folder:** (Optional) The directory where the original ZIP file is moved if the `Move the files to Processed Folder` post-action is selected.
-* **Receipt Folder:** (Optional) A dedicated folder where `receipt.json` will be extracted (prepended with a timestamp).
+1. DIRECTORIES
+• Search Folder 1 & 2: The root directories where the app looks for child folders starting with "transfer-". You can specify up to two search locations.
+• Target Folder: The directory where the contents of the ZIP will be extracted.
+• Processed Folder: (Optional) The directory where the original ZIP file is moved if the "Move the files to Processed Folder" post-action is selected.
+• Receipt Folder: (Optional) A dedicated folder where receipt.json will be extracted (prepended with a timestamp).
 
-## 2. Navigation
-* Use the **⇦ Prev** and **Next ⇨** buttons (or your keyboard's Left/Right arrow keys) to cycle through the found transfer folders.
-* Click **↻ Refresh** to rescan the Search Folder for new or modified transfer folders.
+2. NAVIGATION
+• Use the '⇦ Prev' and 'Next ⇨' buttons (or your keyboard's Left/Right arrow keys) to cycle through the found transfer folders.
+• Click '↻ Refresh' to rescan the Search Folder for new or modified transfer folders.
 
-## 3. Conflict Resolution (If file already exists in Target Folder)
-* **Overwrite:** Replaces the existing file with the new one from the ZIP.
-* **Keep both:** Extracts the new file and adds a number to its filename (e.g., `file (1).txt`).
-* **Rename existing:** Renames the file already on your disk by prepending a timestamp (`YYMMDD-HHMMSS_filename`), then extracts the new file normally.
+3. CONFLICT RESOLUTION (If file already exists in Target Folder)
+• Overwrite: Replaces the existing file with the new one from the ZIP.
+• Keep both: Extracts the new file and adds a number to its filename (e.g., file (1).txt).
+• Rename existing: Renames the file already on your disk by prepending a timestamp (YYMMDD-HHMMSS_filename), then extracts the new file normally.
 
-## 4. Post Processing
-* **Leave:** Leaves the files in place.
-* **Delete:** Permanently deletes the entire transfer folder and all its contents after successful extraction.
-* **Move:** Moves the entire transfer folder and all its contents to the Processed Folder.
+4. POST PROCESSING
+• Leave: Leaves the files in place.
+• Delete: Permanently deletes the entire transfer folder and all its contents after successful extraction.
+• Move: Moves the entire transfer folder and all its contents to the Processed Folder.
 
-## 5. Configurations & Config IDs
-* The app reads `receipt.json` inside the ZIP to find a **Config ID** (previously Permit ID).
-* If no `receipt.json` is found, or it lacks an ID, a **DEFAULT** Config ID is assigned.
-* If you set up your folders and rules for a specific Config ID, click **Save Config**.
-* The next time you encounter a ZIP with that exact Config ID, the application will automatically load your saved folder paths and conflict/post-action settings.
+5. CONFIGURATIONS & CONFIG IDs
+• The app reads 'receipt.json' inside the ZIP to find a 'Config ID' (previously Permit ID).
+• If no receipt.json is found, or it lacks an ID, a "DEFAULT" Config ID is assigned.
+• If you set up your folders and rules for a specific Config ID, click 'Save Config'.
+• The next time you encounter a ZIP with that exact Config ID, the application will automatically load your saved folder paths and conflict/post-action settings.
 
-## 6. Advanced Features (Overrides & Paths)
-* **Absolute Paths:** If a file inside the ZIP is mapped to an absolute path (e.g., `C:\\logs\\file.txt`), it ignores the Target Folder and extracts directly to that path, creating folders as needed.
-* **Receipt Overrides:** If `receipt.json` contains keys like `target_folder`, `process_folder`, `receipt_folder`, `conflict_resolution`, or `post_processing`, these will automatically override your saved GUI settings. The **Save Config** button will turn orange to indicate unsaved changes forced by the receipt.
-* **Processing Log:** The application automatically logs every extracted file, moved file, conflict rename, and post-processing action into a machine-readable JSONL file. Click **📄 View Log** to open it in a readable window, or **📂 Log Folder** to browse the files directly.
+6. ADVANCED FEATURES (OVERRIDES & PATHS)
+• Absolute Paths: If a file inside the ZIP is mapped to an absolute path (e.g., C:\\logs\\file.txt), it ignores the Target Folder and extracts directly to that path, creating folders as needed.
+• Receipt Overrides: If receipt.json contains keys like 'target_folder', 'process_folder', 'receipt_folder', 'conflict_resolution', or 'post_processing', these values will automatically override your saved GUI settings. The 'Save Config' button will turn orange to indicate unsaved changes forced by the receipt.
+• Processing Log: The application automatically logs every extracted file, moved file, conflict rename, and post-processing action into a machine-readable JSONL file. Click '📄 View Log' to open it in a readable window, or '📂 Log Folder' to browse the files directly.
 
-## CLI Mode
+CLI MODE
 You can also run this application via the command line for automation. Run `python inbox_mover.py --cli --help` in your terminal for details.
 """
-        
-        def process_inline(text, base_tag):
-            # Split by markdown bold (**...**) and code (`...`) tokens
-            parts = re.split(r'(\*\*.*?\*\*|`.*?`)', text)
-            for part in parts:
-                if part.startswith('**') and part.endswith('**'):
-                    help_text.insert(tk.END, part[2:-2], (base_tag, "bold"))
-                elif part.startswith('`') and part.endswith('`'):
-                    help_text.insert(tk.END, part[1:-1], (base_tag, "code"))
-                else:
-                    help_text.insert(tk.END, part, base_tag)
-
-        # Simple Markdown Parser
-        for line in instructions.strip().split('\n'):
-            if line.startswith("# "):
-                help_text.insert(tk.END, line[2:] + '\n', "h1")
-            elif line.startswith("## "):
-                help_text.insert(tk.END, line[3:] + '\n', "h2")
-            elif line.startswith("* "):
-                process_inline("• " + line[2:] + '\n', "bullet")
-            else:
-                process_inline(line + '\n', "normal")
-
+        help_text.insert(tk.END, instructions)
         help_text.config(state=tk.DISABLED)
 
     def bind_keys(self):
@@ -1088,11 +984,15 @@ You can also run this application via the command line for automation. Run `pyth
         folder2 = self.search_folder_2_var.get()
         
         folders_to_search = []
-        if folder1 and os.path.isdir(folder1): folders_to_search.append(folder1)
-        elif folder1 and not startup: messagebox.showwarning("Warning", f"Search Folder 1 does not exist:\n{folder1}")
+        if folder1 and os.path.isdir(folder1):
+            folders_to_search.append(folder1)
+        elif folder1 and not startup:
+            messagebox.showwarning("Warning", f"Search Folder 1 does not exist:\n{folder1}")
             
-        if folder2 and os.path.isdir(folder2): folders_to_search.append(folder2)
-        elif folder2 and not startup: messagebox.showwarning("Warning", f"Search Folder 2 does not exist:\n{folder2}")
+        if folder2 and os.path.isdir(folder2):
+            folders_to_search.append(folder2)
+        elif folder2 and not startup:
+            messagebox.showwarning("Warning", f"Search Folder 2 does not exist:\n{folder2}")
 
         if folders_to_search:
             self.folders_data = self.core.find_transfer_folders(folders_to_search)
@@ -1101,7 +1001,8 @@ You can also run this application via the command line for automation. Run `pyth
             else:
                 self.current_index = -1
                 self.clear_zip_display()
-                if not startup: messagebox.showinfo("Info", "No transfer folders found in the specified search folders.")
+                if not startup:
+                    messagebox.showinfo("Info", "No transfer folders found in the specified search folders.")
             self.update_display()
         else:
             self.folders_data = []
@@ -1113,7 +1014,6 @@ You can also run this application via the command line for automation. Run `pyth
         self.zip_name_var.set("No Transfer Folders Found")
         self.permit_id_var.set("")
         self.last_processed_var.set("")
-        self.nav_count_var.set("[ 0 / 0 ]")
         self.set_receipt_text("")
         self.update_nav_buttons()
 
@@ -1124,19 +1024,19 @@ You can also run this application via the command line for automation. Run `pyth
 
         current_data = self.folders_data[self.current_index]
         parent_dir = os.path.dirname(current_data['folder_path'])
-        
-        self.nav_count_var.set(f"[ {self.current_index + 1} / {len(self.folders_data)} ]")
-        self.zip_name_var.set(current_data['folder_name'])
         self.inbox_name_var.set(f"Inbox: {parent_dir}")
+        self.zip_name_var.set(f"[{self.current_index + 1}/{len(self.folders_data)}] {current_data['folder_name']}")
         self.permit_id_var.set(f"Config ID: {current_data['permitId']}")
         self.set_receipt_text(current_data['receipt_raw'])
         
+        # Check for local Inbox Process.log and display latest info
         local_log_path = os.path.join(current_data['folder_path'], "Inbox Process.log")
         if os.path.exists(local_log_path):
             try:
                 with open(local_log_path, 'r', encoding='utf-8') as f:
                     first_line = f.readline().strip()
                     if first_line:
+                        # Extract only up to the User part (drop Config and Folder)
                         display_text = first_line.split(' | Config: ')[0]
                         self.last_processed_var.set(f"Latest: {display_text}")
                     else:
@@ -1146,12 +1046,14 @@ You can also run this application via the command line for automation. Run `pyth
         else:
             self.last_processed_var.set("")
         
+        # 1. Clear fields to prevent state leakage from previous folder
         self.target_folder_var.set("")
         self.target_zip_folder_var.set("")
         self.receipt_folder_var.set("")
         self.conflict_action_var.set("overwrite")
         self.post_action_var.set("leave")
 
+        # 2. Load DEFAULT config as a baseline fallback for ALL folders
         default_config = self.core.load_config("DEFAULT")
         if default_config:
             if default_config.get('target_folder'): self.target_folder_var.set(default_config['target_folder'])
@@ -1160,6 +1062,7 @@ You can also run this application via the command line for automation. Run `pyth
             if default_config.get('conflict_action'): self.conflict_action_var.set(default_config['conflict_action'])
             if default_config.get('post_action'): self.post_action_var.set(default_config['post_action'])
 
+        # 3. Load specific Permit ID config (if applicable and exists) and overwrite baseline
         if current_data['permitId'] != "DEFAULT":
             specific_config = self.core.load_config(current_data['permitId'])
             if specific_config:
@@ -1169,6 +1072,7 @@ You can also run this application via the command line for automation. Run `pyth
                 if specific_config.get('conflict_action'): self.conflict_action_var.set(specific_config['conflict_action'])
                 if specific_config.get('post_action'): self.post_action_var.set(specific_config['post_action'])
             
+        # 4. Apply absolute overrides from receipt.json if present and not empty
         receipt = current_data.get('receipt') or {}
         if receipt.get('target_folder'): self.target_folder_var.set(receipt.get('target_folder'))
         if receipt.get('process_folder'): self.target_zip_folder_var.set(receipt.get('process_folder'))
@@ -1193,42 +1097,121 @@ You can also run this application via the command line for automation. Run `pyth
 
         self.btn_prev.config(state=tk.NORMAL if has_folders and self.current_index > 0 else tk.DISABLED)
         self.btn_next.config(state=tk.NORMAL if has_folders and self.current_index < len(self.folders_data) - 1 else tk.DISABLED)
+        self.btn_process.config(state=tk.NORMAL if can_process else tk.DISABLED)
         
         if hasattr(self, 'btn_save_config'):
-            # Setup Action Buttons
-            if can_process:
-                self.btn_process.config(state=tk.NORMAL, style="Process.TButton")
-            else:
-                self.btn_process.config(state=tk.DISABLED, style="TButton")
-
-            self.btn_save_config.config(state=tk.NORMAL if can_process else tk.DISABLED)
-
-            # Setup Utility Buttons (Top Right of Card)
+            # Forget current layout to repack properly based on log file presence
             self.btn_open_folder.pack_forget()
             self.btn_open_local_log.pack_forget()
+            self.btn_save_config.pack_forget()
             
-            self.btn_open_folder.pack(side=tk.RIGHT, padx=(5, 0))
+            # 1. Open Folder button
+            self.btn_open_folder.pack(side=tk.TOP, fill=tk.X, pady=(0, 2))
             self.btn_open_folder.config(state=tk.NORMAL if has_folders else tk.DISABLED)
             
+            # 2. Save Config button
+            self.btn_save_config.pack(side=tk.TOP, fill=tk.X, pady=(0, 2))
+            self.btn_save_config.config(state=tk.NORMAL if can_process else tk.DISABLED)
+
+            # 3. Local Log button (only if exists)
             local_log_exists = False
             if has_folders and self.current_index >= 0:
                 folder_path = self.folders_data[self.current_index].get('folder_path')
-                if folder_path and os.path.exists(os.path.join(folder_path, "Inbox Process.log")):
-                    local_log_exists = True
+                if folder_path:
+                    local_log_path = os.path.join(folder_path, "Inbox Process.log")
+                    if os.path.exists(local_log_path):
+                        local_log_exists = True
             
             if local_log_exists:
-                self.btn_open_local_log.pack(side=tk.RIGHT, padx=(5, 0))
+                self.btn_open_local_log.pack(side=tk.TOP, fill=tk.X)
 
     def open_current_folder(self):
-        if self.current_index < 0 or not self.folders_data: return
+        if self.current_index < 0 or not self.folders_data:
+            return
         folder_path = self.folders_data[self.current_index].get('folder_path')
         if folder_path and os.path.isdir(folder_path):
-            if sys.platform == "win32": os.startfile(folder_path)
-            elif sys.platform == "darwin": subprocess.call(["open", folder_path])
-            else: subprocess.call(["xdg-open", folder_path])
+            if sys.platform == "win32":
+                os.startfile(folder_path)
+            elif sys.platform == "darwin":
+                subprocess.call(["open", folder_path])
+            else:
+                subprocess.call(["xdg-open", folder_path])
+
+    def open_local_log(self):
+        if self.current_index < 0 or not self.folders_data:
+            return
+        folder_path = self.folders_data[self.current_index].get('folder_path')
+        if not folder_path or not os.path.isdir(folder_path):
+            return
+            
+        local_log_path = os.path.join(folder_path, "Inbox Process.log")
+        if not os.path.exists(local_log_path):
+            return
+
+        # Create a modal window
+        log_win = tk.Toplevel(self.root)
+        log_win.title("Local Process Log")
+        log_win.geometry("900x600")
+        log_win.transient(self.root)
+        log_win.grab_set()
+        
+        # Match root background
+        log_win.configure(bg=self.root.cget("bg"))
+        
+        frame = ttk.Frame(log_win, padding="15")
+        frame.pack(fill=tk.BOTH, expand=True)
+        
+        text_widget = tk.Text(frame, wrap=tk.WORD, font=("Courier", self.base_font_size))
+        scrollbar = ttk.Scrollbar(frame, orient=tk.VERTICAL, command=text_widget.yview)
+        text_widget.configure(yscrollcommand=scrollbar.set)
+        
+        if self.is_dark_mode:
+            text_widget.configure(bg="#1e1e1e", fg="#ffffff", insertbackground="#ffffff")
+        else:
+            text_widget.configure(bg="#ffffff", fg="#000000", insertbackground="#000000")
+            
+        text_widget.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+        
+        # Color tags for formatting
+        text_widget.tag_configure("success", foreground="#10b981") # Green
+        text_widget.tag_configure("error", foreground="#ef4444") # Red
+        text_widget.tag_configure("header", font=("Courier", self.base_font_size, "bold"))
+        text_widget.tag_configure("info", foreground="#3b82f6" if not self.is_dark_mode else "#60a5fa") # Blue
+        
+        try:
+            with open(local_log_path, 'r', encoding='utf-8') as f:
+                lines = f.readlines()
+                
+            if not lines:
+                text_widget.insert(tk.END, "Log file is currently empty.")
+            else:
+                for line in lines:
+                    # Simple heuristic for coloring the plain text log
+                    if line.startswith("[") and "SUCCESS" in line:
+                        text_widget.insert(tk.END, line, "success")
+                    elif line.startswith("[") and "ERROR" in line:
+                        text_widget.insert(tk.END, line, "error")
+                    elif line.startswith("["):
+                        text_widget.insert(tk.END, line, "header")
+                    elif "CONFLICT" in line:
+                        text_widget.insert(tk.END, line, "info")
+                    else:
+                        text_widget.insert(tk.END, line)
+                        
+        except Exception as e:
+            text_widget.insert(tk.END, f"Error reading log file: {e}\n", "error")
+            
+        text_widget.config(state=tk.DISABLED)
+        
+        # Close button at bottom
+        btn_close = ttk.Button(log_win, text="Close", command=log_win.destroy, width=15)
+        btn_close.pack(pady=(0, 15))
 
     def check_unsaved_changes(self, *args):
-        if not hasattr(self, 'btn_save_config'): return 
+        # Protect against trace firing during UI setup before button exists
+        if not hasattr(self, 'btn_save_config'):
+            return 
             
         if self.current_index < 0 or not self.folders_data:
             self.btn_save_config.config(style="TButton", text="Save Config")
@@ -1243,6 +1226,7 @@ You can also run this application via the command line for automation. Run `pyth
             return
             
         saved_config = self.core.load_config(permit_id)
+        
         current_config = {
             "target_folder": self.target_folder_var.get(),
             "target_zip_folder": self.target_zip_folder_var.get(),
@@ -1253,13 +1237,25 @@ You can also run this application via the command line for automation. Run `pyth
 
         is_unsaved = False
         if saved_config is None:
-            empty_config = {"target_folder": "", "target_zip_folder": "", "receipt_folder": "", "conflict_action": "overwrite", "post_action": "leave"}
-            if current_config != empty_config: is_unsaved = True
+            # Don't show orange button on a completely unconfigured empty state
+            empty_config = {
+                "target_folder": "",
+                "target_zip_folder": "",
+                "receipt_folder": "",
+                "conflict_action": "overwrite",
+                "post_action": "leave"
+            }
+            if current_config != empty_config:
+                is_unsaved = True
         else:
-            if current_config != saved_config: is_unsaved = True
+            # Compare exact match
+            if current_config != saved_config:
+                is_unsaved = True
                 
-        if is_unsaved: self.btn_save_config.config(style="Accent.TButton", text="Save Config *")
-        else: self.btn_save_config.config(style="TButton", text="Save Config")
+        if is_unsaved:
+            self.btn_save_config.config(style="Accent.TButton", text="Save Config *")
+        else:
+            self.btn_save_config.config(style="TButton", text="Save Config")
 
     def prev_zip(self):
         if self.current_index > 0:
@@ -1306,6 +1302,7 @@ You can also run this application via the command line for automation. Run `pyth
             "post_action": self.post_action_var.get()
         }
 
+        # Validation
         if not config['target_folder']:
             messagebox.showerror("Error", "Please specify a Target Folder.")
             return
@@ -1315,6 +1312,7 @@ You can also run this application via the command line for automation. Run `pyth
 
         self.btn_process.config(state=tk.DISABLED, text="Processing...")
         
+        # Run in thread to prevent UI freezing
         def worker():
             try:
                 self.core.process_zip(current_data, config)
@@ -1326,9 +1324,11 @@ You can also run this application via the command line for automation. Run `pyth
 
     def on_process_success(self):
         messagebox.showinfo("Success", "Zip processed successfully.\n\nDetails have been written to the log.")
-        self.btn_process.config(text="PROCESS FOLDER")
+        self.btn_process.config(text="PROCESS")
         
-        folder1, folder2 = self.search_folder_1_var.get(), self.search_folder_2_var.get()
+        # Refresh the list quietly as the folder might have been moved or deleted
+        folder1 = self.search_folder_1_var.get()
+        folder2 = self.search_folder_2_var.get()
         folders_to_search = []
         if folder1 and os.path.isdir(folder1): folders_to_search.append(folder1)
         if folder2 and os.path.isdir(folder2): folders_to_search.append(folder2)
@@ -1336,8 +1336,11 @@ You can also run this application via the command line for automation. Run `pyth
         if folders_to_search:
             self.folders_data = self.core.find_transfer_folders(folders_to_search)
             if self.folders_data:
-                if self.current_index >= len(self.folders_data): self.current_index = max(0, len(self.folders_data) - 1)
-            else: self.current_index = -1
+                # Ensure the index stays within bounds if files were removed
+                if self.current_index >= len(self.folders_data):
+                    self.current_index = max(0, len(self.folders_data) - 1)
+            else:
+                self.current_index = -1
             self.update_display()
         else:
             self.folders_data = []
@@ -1346,17 +1349,17 @@ You can also run this application via the command line for automation. Run `pyth
 
     def on_process_error(self, err):
         messagebox.showerror("Processing Error", f"An error occurred.\nDetails have been written to the log.\n\nError: {err}")
-        self.btn_process.config(state=tk.NORMAL, text="PROCESS FOLDER")
+        self.btn_process.config(state=tk.NORMAL, text="PROCESS")
         self.update_nav_buttons()
 
 
 # --------------------------------------------------------------------------- #
-# CLI APPLICATION (Untouched)
+# CLI APPLICATION
 # --------------------------------------------------------------------------- #
 
 def run_cli():
     parser = argparse.ArgumentParser(description=f"Inbox Mover v{VERSION} - the perfect FileButler companion CLI")
-    parser.add_argument('--cli', action='store_true', help=argparse.SUPPRESS) 
+    parser.add_argument('--cli', action='store_true', help=argparse.SUPPRESS) # Hide the switch that triggered this
     parser.add_argument('-s', '--search-folders', nargs='+', required=True, help='One or more folders to search for transfer folders')
     parser.add_argument('-t', '--target-folder', required=True, help='Default target folder for extraction')
     parser.add_argument('-z', '--target-zip-folder', help='Processed Folder for moving processed zips')
@@ -1382,6 +1385,7 @@ def run_cli():
             print("  Folder is empty. Skipping.")
             continue
         
+        # Baseline from CLI arguments
         config = {
             "target_folder": args.target_folder,
             "target_zip_folder": args.target_zip_folder,
@@ -1390,6 +1394,7 @@ def run_cli():
             "post_action": args.post_action
         }
         
+        # 1. Load DEFAULT config as fallback baseline
         default_config = core.load_config("DEFAULT")
         if default_config:
             for k, v in default_config.items():
@@ -1398,6 +1403,7 @@ def run_cli():
         else:
             print("  Using CLI arguments for baseline configuration.")
 
+        # 2. Load specific config and override
         if data['permitId'] != "DEFAULT":
             specific_config = core.load_config(data['permitId'])
             if specific_config:
@@ -1405,6 +1411,7 @@ def run_cli():
                     if v: config[k] = v
                 print(f"  Loaded specific configuration for Config ID: {data['permitId']}.")
 
+        # 3. Apply overrides from receipt.json if present and not empty
         receipt = data.get('receipt') or {}
         if receipt.get('target_folder'): config['target_folder'] = receipt.get('target_folder')
         if receipt.get('process_folder'): config['target_zip_folder'] = receipt.get('process_folder')
@@ -1412,6 +1419,7 @@ def run_cli():
         if receipt.get('conflict_resolution'): config['conflict_action'] = receipt.get('conflict_resolution')
         if receipt.get('post_processing'): config['post_action'] = receipt.get('post_processing')
 
+        # Validate post-action move requirement
         if config.get('post_action') == 'move' and not config.get('target_zip_folder'):
             error_msg = "Post action is 'move' but no Processed Folder specified. Skipping."
             print(f"  Error: {error_msg}")
@@ -1423,32 +1431,27 @@ def run_cli():
             print("  Successfully processed. Actions written to log.")
         except Exception as e:
             print(f"  Error processing zip: {e}")
+            # Core already handles the ERROR logging for exceptions
 
 # --------------------------------------------------------------------------- #
-# MAIN ENTRY POINT (Untouched)
+# MAIN ENTRY POINT
 # --------------------------------------------------------------------------- #
 
 def main():
-    if len(sys.argv) > 1:
+    # If '--cli' is in arguments, run command line mode
+    if '--cli' in sys.argv:
         run_cli()
     else:
-        try:
-            root = tk.Tk()
-            app = InboxMoverGUI(root)
-            
-            root.lift()
-            root.attributes('-topmost', True)
-            root.after_idle(root.attributes, '-topmost', False)
-            
-            root.mainloop()
-        except tk.TclError as e:
-            print(f"GUI Initialization Error: {e}")
-            print("\nIt appears you are running Inbox Mover on a headless server (e.g., Azure Linux VM) without a display.")
-            print("To process folders automatically from the command line, please provide the required arguments.")
-            print("Example:")
-            print("  python3 inbox_mover.py -s /path/to/search -t /path/to/target\n")
-            print("For a full list of commands, run: python3 inbox_mover.py --help")
-            sys.exit(1)
+        # Run GUI mode
+        root = tk.Tk()
+        app = InboxMoverGUI(root)
+        
+        # Bring to front on Mac/Windows
+        root.lift()
+        root.attributes('-topmost', True)
+        root.after_idle(root.attributes, '-topmost', False)
+        
+        root.mainloop()
 
 if __name__ == '__main__':
     main()

@@ -1,12 +1,10 @@
-# **Inbox Mover \- the perfect FileButler companion (v0.8)**
+# **Inbox Mover \- the perfect FileButler companion (v0.9)**
 
-**Inbox Mover** is a cross-platform utility designed to process files in the **transfer-** folders found in **i:** and **z:\\inbox** on [**myDRE**](https://www.google.com/search?q=https://mydre.org)**.** 
+**Inbox Mover** is a cross-platform utility designed to process files in the **transfer-** folders found in **i:** and **z:\\inbox** on [**myDRE**](https://mydre.org)**.**
 
-**Inbox Mover** processes the files into a designated target folder while automatically resolving file conflicts based on your preferences. Zip-files will be automatically extracted. It features both a user-friendly Material-inspired graphical interface (GUI) and a Command-Line Interface (CLI) for automation.
+**Inbox Mover** processes the files into a designated target folder while automatically resolving file conflicts based on your preferences. Zip-files will be automatically extracted. It features both a modern, user-friendly graphical interface (GUI) and a Command-Line Interface (CLI) for automation.
 
 **Inbox Mover** is optimized to use the **receipt.json** in **myDRE FileButler.**
-
-![Inbox Mover Screenshot](./FileButler.png)
 
 ## **🛠️ Prerequisites**
 
@@ -16,7 +14,7 @@ To run Inbox Mover, you need **Python 3** installed on your system. The applicat
 
 #### **On Windows**
 
-1. Go to the official Python website: [python.org/downloads](https://www.google.com/search?q=https://www.python.org/downloads/)  
+1. Go to the official Python website: [python.org/downloads](https://www.python.org/downloads/)  
 2. Download the latest Python 3 installer for Windows.  
 3. Run the installer.  
 4. **⚠️ CRITICAL STEP:** At the bottom of the installer window, ensure you check the box that says **"Add Python to PATH"** before clicking "Install Now".  
@@ -36,7 +34,7 @@ Because Inbox Mover is a standalone script, "installing" it just means placing i
 ### **Windows Setup**
 
 1. Extract the ZIP file containing inbox\_mover.py.  
-2. Move the *inbox\_mover.py* file to **C:\\helpers\\** *(You may need to create the **helpers** folder on your C: drive if it doesn't exist yet)*.  
+2. Move the inbox\_mover.py file to C:\\scripts\\ *(You may need to create the "scripts" folder on your C: drive if it doesn't exist yet)*.  
 3. Right-click on inbox\_mover.py and select **"Create shortcut"**.  
 4. Right-click the newly created shortcut and select **"Properties"**.  
 5. In the Properties window, locate the **"Run"** dropdown menu, change it to **"Minimized"**, and click **OK**. *(This ensures the background command prompt stays out of your way when launching the app).*  
@@ -53,10 +51,17 @@ Because Inbox Mover is a standalone script, "installing" it just means placing i
 
 To launch the graphical interface, double-click the shortcut you created on your Desktop.
 
+**UI Controls:** You can adjust the application's appearance using the buttons in the top right:
+
+* **☀ / ☾:** Toggle between Light and Dark mode.  
+* **?:** Open the formatted Markdown Help Menu.  
+* **A+ / A-:** Increase or decrease the application font size.  
+* **Reset View:** Snap the window back to its default size (1100x950) and default font size (11).
+
 ### **1\. Directories**
 
-* **Search Folder 1 & 2:** The root directories where the app looks for child folders starting with transfer-. You can specify up to two search locations.  
-* **Target Folder:** The directory where the contents of the ZIP files will be extracted.  
+* **Search Folder 1 & 2:** The root directories where the app looks for child folders starting with transfer-. You can specify up to two search locations (defaults to i:/ and z:/inbox).  
+* **Target Folder:** The directory where the contents of the ZIP files will be extracted. Missing folders are created automatically.  
 * **Processed Folder:** (Optional) The directory where the entire transfer folder is moved if the "Move" post-action is selected.  
 * **Receipt Folder:** (Optional) A dedicated folder where the receipt.json will be extracted (prepended with a timestamp to prevent overwriting).
 
@@ -64,7 +69,7 @@ To launch the graphical interface, double-click the shortcut you created on your
 
 * Use the **'⇦ Prev'** and **'Next ⇨'** buttons (or your keyboard's Left/Right arrow keys) to cycle through the found transfer folders.  
 * Click **'↻ Refresh'** to manually rescan the Search Folders for new or modified transfer folders.  
-* Use the **"Open Folder"** button to quickly view the selected transfer- folder in your native file explorer.
+* Use the **"📂 Open Folder"** button to quickly view the selected transfer- folder in your native file explorer.
 
 ### **3\. Conflict Resolution (If a file already exists)**
 
@@ -74,23 +79,27 @@ To launch the graphical interface, double-click the shortcut you created on your
 
 ### **4\. Post Processing**
 
-* **Leave:** Leaves the files in places.  
-* **Delete:** Permanently deletes the entire transfer folder and all its contents after successful extraction.  
-* **Move:** Moves the entire transfer folder and all its contents to the Processed Folder.
+* **Leave the files in place:** Leaves the source files where they are.  
+* **Delete the files:** Permanently deletes the entire transfer folder and all its contents after successful extraction.  
+* **Move the files to Processed Folder:** Moves the entire transfer folder and all its contents to the Processed Folder.
 
 ### **5\. Configurations & Config IDs**
 
 The application reads the receipt.json file inside the ZIP to identify a **Config ID** (previously Permit ID).
 
-* If no receipt.json is found, a "DEFAULT" Config ID is assigned.  
+* If no receipt.json is found, a "DEFAULT" Config ID is assigned. The app will use your saved DEFAULT settings as a fallback.  
 * Once you set up your folders and rules for a specific Config ID, click **'Save Config'**.  
-* The next time you encounter a transfer folder with that exact Config ID, the application will automatically load your saved folder paths and settings.
+* The next time you encounter a transfer folder with that exact Config ID, the application will automatically load your saved folder paths and settings over the DEFAULT baseline.
 
-### **6\. Advanced Features**
+### **6\. Advanced Logging & Overrides**
 
-* **Audit Logging:** Every processed file, resolved conflict, and post-action move is written to a machine-readable JSONL file. Click **'📄 View Log'** in the top bar to inspect exactly what the application has done, or click **'📂 Log Folder'** to open the directory containing your logs and configurations.  
-* **Receipt.json Overrides:** If the receipt.json contains specific settings keys (target\_folder, process\_folder, receipt\_folder, conflict\_resolution, post\_processing) with non-empty values, these will automatically override your GUI settings. The "Save Config" button will turn orange to notify you of unsaved changes forced by the receipt.  
-* **Absolute Path Extraction:** If a file compressed within the ZIP archive contains an absolute path (e.g., C:\\reports\\data.csv or /var/log/app.log), the app will bypass the "Target Folder" setting entirely and extract that specific file to its absolute path, creating necessary parent directories automatically.
+* **Global Audit Logging:** Every processed file and resolved conflict is written to a machine-readable JSONL file (process\_log.jsonl). Click **'📄 View Log'** to inspect it.  
+* **Local Process Logs:** When a folder is processed successfully (and not deleted), an Inbox Process.log file is dropped directly into the folder (or its new location in the Processed Folder).  
+  * If this file exists, the GUI will dynamically display a **"Latest: \[Timestamp\] SUCCESS"** label.  
+  * A **"📄 Process Log"** button will dynamically appear to let you view this specific folder's history in a clean, color-coded modal window.  
+* **Receipt JSON Injection:** For complete traceability, the application will parse the successfully extracted receipt.json and cleanly inject the processing metadata directly into it under a new "processing\_logs" array.  
+* **Receipt Overrides:** If the receipt.json inside the ZIP contains keys like target\_folder, process\_folder, receipt\_folder, conflict\_resolution, or post\_processing, these values will automatically override your GUI settings. The "Save Config" button will turn orange (Save Config \*) to notify you.  
+* **Absolute Path Extraction:** If a file compressed within the ZIP archive contains an absolute path (e.g., C:\\reports\\data.csv), the app bypasses the "Target Folder" setting and extracts that specific file to its absolute path.
 
 ## **💻 How to Use (CLI Mode)**
 
@@ -109,5 +118,3 @@ python inbox\_mover.py \--cli \-s \<search\_folder\_1\> \<search\_folder\_2\> \-
 * \-r, \--receipt-folder: Target folder specifically for the receipt.json file.  
 * \-c, \--conflict-action: Action when extracted file already exists. Choices: overwrite, keep\_both, rename\_existing (Default: overwrite).  
 * \-p, \--post-action: Action to perform after extraction. Choices: leave, delete, move (Default: leave).
-
-*Note: CLI actions are also fully logged to process\_log.jsonl.*
