@@ -505,6 +505,9 @@ class InboxMoverGUI:
         
         if self.search_folder_1_var.get() or self.search_folder_2_var.get():
             self.on_search_folder_changed(startup=True)
+            
+        # Start the keyboard focus on the Process Folder button
+        self.root.after(100, lambda: self.focus_btn(self.btn_process))
 
     def setup_ui(self):
         self.main_frame = ttk.Frame(self.root, padding=20)
@@ -523,22 +526,22 @@ class InboxMoverGUI:
         
         tools_frame = ttk.Frame(header_frame)
         tools_frame.pack(side=tk.RIGHT, anchor=tk.S)
-        self.theme_btn = ttk.Button(tools_frame, text="☀", width=3, command=self.toggle_theme)
+        self.theme_btn = ttk.Button(tools_frame, text="☀", width=3, command=self.toggle_theme, takefocus=0)
         self.theme_btn.pack(side=tk.RIGHT)
-        self.btn_help = ttk.Button(tools_frame, text="?", width=3, command=self.show_help)
+        self.btn_help = ttk.Button(tools_frame, text="?", width=3, command=self.show_help, takefocus=0)
         self.btn_help.pack(side=tk.RIGHT, padx=5)
-        self.btn_clear_log = ttk.Button(tools_frame, text="🗑 Clear Log", command=self.clear_log)
+        self.btn_clear_log = ttk.Button(tools_frame, text="🗑 Clear Log", command=self.clear_log, takefocus=0)
         self.btn_clear_log.pack(side=tk.RIGHT, padx=5)
-        self.btn_view_log = ttk.Button(tools_frame, text="📄 View Log", command=self.view_log)
+        self.btn_view_log = ttk.Button(tools_frame, text="📄 View Log", command=self.view_log, takefocus=0)
         self.btn_view_log.pack(side=tk.RIGHT, padx=5)
-        self.btn_open_log_folder = ttk.Button(tools_frame, text="📂 Log Folder", command=self.open_log_folder)
+        self.btn_open_log_folder = ttk.Button(tools_frame, text="📂 Log Folder", command=self.open_log_folder, takefocus=0)
         self.btn_open_log_folder.pack(side=tk.RIGHT, padx=5)
         
-        self.btn_increase_font = ttk.Button(tools_frame, text="A+", width=3, command=self.increase_font)
+        self.btn_increase_font = ttk.Button(tools_frame, text="A+", width=3, command=self.increase_font, takefocus=0)
         self.btn_increase_font.pack(side=tk.RIGHT, padx=2)
-        self.btn_reset_view = ttk.Button(tools_frame, text="Reset View", command=self.reset_view)
+        self.btn_reset_view = ttk.Button(tools_frame, text="Reset View", command=self.reset_view, takefocus=0)
         self.btn_reset_view.pack(side=tk.RIGHT, padx=2)
-        self.btn_decrease_font = ttk.Button(tools_frame, text="A-", width=3, command=self.decrease_font)
+        self.btn_decrease_font = ttk.Button(tools_frame, text="A-", width=3, command=self.decrease_font, takefocus=0)
         self.btn_decrease_font.pack(side=tk.RIGHT, padx=2)
 
         ttk.Separator(self.main_frame, orient='horizontal').pack(fill=tk.X, pady=(0, 15))
@@ -568,19 +571,19 @@ class InboxMoverGUI:
         
         nav_controls = ttk.Frame(card_top, style="Card.TFrame")
         nav_controls.pack(side=tk.LEFT)
-        self.btn_refresh = ttk.Button(nav_controls, text="↻ Refresh", command=self.on_search_folder_changed)
+        self.btn_refresh = ttk.Button(nav_controls, text="↻ Refresh", command=self.on_search_folder_changed, takefocus=0)
         self.btn_refresh.pack(side=tk.LEFT, padx=(0, 5))
-        self.btn_prev = ttk.Button(nav_controls, text="⇦ Prev", width=8, command=self.prev_zip)
+        self.btn_prev = ttk.Button(nav_controls, text="⇦ Prev", width=8, command=self.prev_zip, takefocus=0)
         self.btn_prev.pack(side=tk.LEFT, padx=2)
         self.lbl_nav_count = ttk.Label(nav_controls, textvariable=self.nav_count_var, style="Card.TLabel")
         self.lbl_nav_count.pack(side=tk.LEFT, padx=10)
-        self.btn_next = ttk.Button(nav_controls, text="Next ⇨", width=8, command=self.next_zip)
+        self.btn_next = ttk.Button(nav_controls, text="Next ⇨", width=8, command=self.next_zip, takefocus=0)
         self.btn_next.pack(side=tk.LEFT, padx=2)
 
         utils_controls = ttk.Frame(card_top, style="Card.TFrame")
         utils_controls.pack(side=tk.RIGHT)
-        self.btn_open_local_log = ttk.Button(utils_controls, text="📄 Process Log", command=self.open_local_log)
-        self.btn_open_folder = ttk.Button(utils_controls, text="📂 Open Folder", command=self.open_current_folder)
+        self.btn_open_local_log = ttk.Button(utils_controls, text="📄 Process Log", command=self.open_local_log, takefocus=0)
+        self.btn_open_folder = ttk.Button(utils_controls, text="📂 Open Folder", command=self.open_current_folder, takefocus=0)
         # Packed dynamically in update_nav_buttons
 
         # Card Info
@@ -602,16 +605,16 @@ class InboxMoverGUI:
         conflict_col = ttk.Frame(card_options, style="Card.TFrame")
         conflict_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         ttk.Label(conflict_col, text="Conflict Resolution:", style="CardHeader.TLabel").pack(anchor=tk.W, pady=(0, 5))
-        ttk.Radiobutton(conflict_col, text="Overwrite existing file", variable=self.conflict_action_var, value="overwrite", style="Card.TRadiobutton").pack(anchor=tk.W)
-        ttk.Radiobutton(conflict_col, text="Keep both (add number)", variable=self.conflict_action_var, value="keep_both", style="Card.TRadiobutton").pack(anchor=tk.W)
-        ttk.Radiobutton(conflict_col, text="Rename existing file", variable=self.conflict_action_var, value="rename_existing", style="Card.TRadiobutton").pack(anchor=tk.W)
+        ttk.Radiobutton(conflict_col, text="Overwrite existing file", variable=self.conflict_action_var, value="overwrite", style="Card.TRadiobutton", takefocus=0).pack(anchor=tk.W)
+        ttk.Radiobutton(conflict_col, text="Keep both (add number)", variable=self.conflict_action_var, value="keep_both", style="Card.TRadiobutton", takefocus=0).pack(anchor=tk.W)
+        ttk.Radiobutton(conflict_col, text="Rename existing file", variable=self.conflict_action_var, value="rename_existing", style="Card.TRadiobutton", takefocus=0).pack(anchor=tk.W)
 
         post_col = ttk.Frame(card_options, style="Card.TFrame")
         post_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         ttk.Label(post_col, text="Post Processing:", style="CardHeader.TLabel").pack(anchor=tk.W, pady=(0, 5))
-        ttk.Radiobutton(post_col, text="Leave the files in place", variable=self.post_action_var, value="leave", style="Card.TRadiobutton").pack(anchor=tk.W)
-        ttk.Radiobutton(post_col, text="Delete the files", variable=self.post_action_var, value="delete", style="Card.TRadiobutton").pack(anchor=tk.W)
-        ttk.Radiobutton(post_col, text="Move the files to Processed Folder", variable=self.post_action_var, value="move", style="Card.TRadiobutton").pack(anchor=tk.W)
+        ttk.Radiobutton(post_col, text="Leave the files in place", variable=self.post_action_var, value="leave", style="Card.TRadiobutton", takefocus=0).pack(anchor=tk.W)
+        ttk.Radiobutton(post_col, text="Delete the files", variable=self.post_action_var, value="delete", style="Card.TRadiobutton", takefocus=0).pack(anchor=tk.W)
+        ttk.Radiobutton(post_col, text="Move the files to Processed Folder", variable=self.post_action_var, value="move", style="Card.TRadiobutton", takefocus=0).pack(anchor=tk.W)
 
         # Card Bottom Bar (Actions) - Pack this FIRST so it anchors to the bottom and never gets pushed off-screen
         card_actions = ttk.Frame(self.card_frame, style="Card.TFrame")
@@ -621,11 +624,25 @@ class InboxMoverGUI:
         self.btn_save_config = ttk.Button(card_actions, text="Save Config", command=self.save_permit_config)
         self.btn_save_config.pack(side=tk.RIGHT, padx=10)
 
+        # Keyboard Navigation & Enter Support
+        self.btn_process.bind('<Tab>', lambda e: self.focus_btn(self.btn_save_config))
+        self.btn_save_config.bind('<Tab>', lambda e: self.focus_btn(self.btn_process))
+        self.btn_process.bind('<Shift-Tab>', lambda e: self.focus_btn(self.btn_save_config))
+        self.btn_save_config.bind('<Shift-Tab>', lambda e: self.focus_btn(self.btn_process))
+
+        self.btn_process.bind('<Return>', lambda e: self.invoke_btn(self.btn_process))
+        self.btn_save_config.bind('<Return>', lambda e: self.invoke_btn(self.btn_save_config))
+
+        self.btn_process.bind('<FocusIn>', lambda e: self.refresh_btn_text(self.btn_process))
+        self.btn_process.bind('<FocusOut>', lambda e: self.refresh_btn_text(self.btn_process))
+        self.btn_save_config.bind('<FocusIn>', lambda e: self.refresh_btn_text(self.btn_save_config))
+        self.btn_save_config.bind('<FocusOut>', lambda e: self.refresh_btn_text(self.btn_save_config))
+
         # Card Text Area - Pack this LAST with expand=True so it dynamically fills the REMAINING space
         text_wrapper = ttk.Frame(self.card_frame, style="Card.TFrame")
         text_wrapper.pack(side=tk.TOP, fill=tk.BOTH, expand=True, pady=(0, 15))
         ttk.Label(text_wrapper, text="Source Folder Content:", style="CardHeader.TLabel").pack(anchor=tk.W, pady=(0, 5))
-        self.receipt_text = tk.Text(text_wrapper, wrap=tk.WORD, state=tk.DISABLED, relief="flat", highlightthickness=1, height=10)
+        self.receipt_text = tk.Text(text_wrapper, wrap=tk.WORD, state=tk.DISABLED, relief="flat", highlightthickness=1, height=10, takefocus=0)
         scrollbar = ttk.Scrollbar(text_wrapper, orient=tk.VERTICAL, command=self.receipt_text.yview)
         self.receipt_text.configure(yscrollcommand=scrollbar.set)
         self.receipt_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -637,7 +654,7 @@ class InboxMoverGUI:
         lbl = ttk.Label(parent, text=label_text)
         lbl.grid(row=row, column=0, sticky=tk.W, pady=4, padx=(0, 15))
         
-        entry = ttk.Entry(parent, textvariable=str_var)
+        entry = ttk.Entry(parent, textvariable=str_var, takefocus=0)
         entry.grid(row=row, column=1, sticky=tk.EW, pady=4)
         parent.columnconfigure(1, weight=1)
         
@@ -659,8 +676,8 @@ class InboxMoverGUI:
             elif sys.platform == "darwin": subprocess.call(["open", path])
             else: subprocess.call(["xdg-open", path])
 
-        ttk.Button(btn_frame, text="Browse...", command=browse).pack(side=tk.LEFT, padx=(0, 5))
-        ttk.Button(btn_frame, text="Open", width=6, command=open_dir).pack(side=tk.LEFT)
+        ttk.Button(btn_frame, text="Browse...", command=browse, takefocus=0).pack(side=tk.LEFT, padx=(0, 5))
+        ttk.Button(btn_frame, text="Open", width=6, command=open_dir, takefocus=0).pack(side=tk.LEFT)
         
         if callback:
             entry.bind('<FocusOut>', lambda e: callback())
@@ -787,14 +804,14 @@ class InboxMoverGUI:
         
         # Standard Buttons
         style.configure("TButton", background=btn_bg, foreground=fg_color, padding=5, borderwidth=0)
-        style.map("TButton", background=[('active', btn_active), ('disabled', bg_color)], foreground=[('disabled', fg_dim)])
+        style.map("TButton", background=[('active', btn_active), ('focus', btn_active), ('disabled', bg_color)], foreground=[('disabled', fg_dim)])
         
         # Action Buttons
         style.configure("Accent.TButton", background=accent_bg, foreground="#ffffff", padding=5, borderwidth=0)
-        style.map("Accent.TButton", background=[('active', accent_active)])
+        style.map("Accent.TButton", background=[('active', accent_active), ('focus', accent_active)])
         
         style.configure("Process.TButton", background=process_bg, foreground=process_fg, borderwidth=0)
-        style.map("Process.TButton", background=[('active', process_active), ('disabled', btn_bg)], foreground=[('disabled', fg_dim)])
+        style.map("Process.TButton", background=[('active', process_active), ('focus', process_active), ('disabled', btn_bg)], foreground=[('disabled', fg_dim)])
 
         # Card Styles
         style.configure("Card.TFrame", background=card_bg)
@@ -1197,11 +1214,13 @@ You can also run this application via the command line for automation. Run `pyth
         if hasattr(self, 'btn_save_config'):
             # Setup Action Buttons
             if can_process:
-                self.btn_process.config(state=tk.NORMAL, style="Process.TButton")
+                self.btn_process.config(state=tk.NORMAL, style="Process.TButton", text="PROCESS FOLDER")
             else:
-                self.btn_process.config(state=tk.DISABLED, style="TButton")
+                self.btn_process.config(state=tk.DISABLED, style="TButton", text="PROCESS FOLDER")
+            self.refresh_btn_text(self.btn_process)
 
             self.btn_save_config.config(state=tk.NORMAL if can_process else tk.DISABLED)
+            self.refresh_btn_text(self.btn_save_config)
 
             # Setup Utility Buttons (Top Right of Card)
             self.btn_open_folder.pack_forget()
@@ -1232,6 +1251,7 @@ You can also run this application via the command line for automation. Run `pyth
             
         if self.current_index < 0 or not self.folders_data:
             self.btn_save_config.config(style="TButton", text="Save Config")
+            self.refresh_btn_text(self.btn_save_config)
             return
             
         current_data = self.folders_data[self.current_index]
@@ -1240,6 +1260,7 @@ You can also run this application via the command line for automation. Run `pyth
         
         if not permit_id or not can_process:
             self.btn_save_config.config(style="TButton", text="Save Config")
+            self.refresh_btn_text(self.btn_save_config)
             return
             
         saved_config = self.core.load_config(permit_id)
@@ -1258,8 +1279,12 @@ You can also run this application via the command line for automation. Run `pyth
         else:
             if current_config != saved_config: is_unsaved = True
                 
-        if is_unsaved: self.btn_save_config.config(style="Accent.TButton", text="Save Config *")
-        else: self.btn_save_config.config(style="TButton", text="Save Config")
+        if is_unsaved: 
+            self.btn_save_config.config(style="Accent.TButton", text="Save Config *")
+        else: 
+            self.btn_save_config.config(style="TButton", text="Save Config")
+            
+        self.refresh_btn_text(self.btn_save_config)
 
     def prev_zip(self):
         if self.current_index > 0:
@@ -1314,6 +1339,7 @@ You can also run this application via the command line for automation. Run `pyth
             return
 
         self.btn_process.config(state=tk.DISABLED, text="Processing...")
+        self.refresh_btn_text(self.btn_process)
         
         def worker():
             try:
@@ -1327,6 +1353,7 @@ You can also run this application via the command line for automation. Run `pyth
     def on_process_success(self):
         messagebox.showinfo("Success", "Zip processed successfully.\n\nDetails have been written to the log.")
         self.btn_process.config(text="PROCESS FOLDER")
+        self.refresh_btn_text(self.btn_process)
         
         folder1, folder2 = self.search_folder_1_var.get(), self.search_folder_2_var.get()
         folders_to_search = []
@@ -1347,7 +1374,39 @@ You can also run this application via the command line for automation. Run `pyth
     def on_process_error(self, err):
         messagebox.showerror("Processing Error", f"An error occurred.\nDetails have been written to the log.\n\nError: {err}")
         self.btn_process.config(state=tk.NORMAL, text="PROCESS FOLDER")
+        self.refresh_btn_text(self.btn_process)
         self.update_nav_buttons()
+
+    # --- Focus and Keybind Helpers ---
+    def focus_btn(self, target_btn):
+        if str(target_btn.cget('state')) == 'normal':
+            target_btn.focus_set()
+        return 'break'
+
+    def invoke_btn(self, btn):
+        if str(btn.cget('state')) == 'normal':
+            btn.invoke()
+        return 'break'
+
+    def refresh_btn_text(self, btn):
+        if not hasattr(self, 'btn_process') or not hasattr(self, 'btn_save_config'):
+            return
+
+        # Strip existing arrows to find the raw text
+        current_text = btn.cget('text').replace('► ', '').replace(' ◄', '')
+
+        if btn == self.btn_process:
+            base_text = "Processing..." if "Processing" in current_text else "PROCESS FOLDER"
+        elif btn == self.btn_save_config:
+            base_text = "Save Config *" if "*" in current_text else "Save Config"
+        else:
+            return
+
+        # Inject focus arrows if button is currently selected
+        if self.root.focus_get() == btn and str(btn.cget('state')) == 'normal':
+            btn.config(text=f"► {base_text} ◄")
+        else:
+            btn.config(text=base_text)
 
 
 # --------------------------------------------------------------------------- #

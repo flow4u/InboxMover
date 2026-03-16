@@ -1,12 +1,19 @@
-# **Inbox Mover \- the perfect FileButler companion (v0.9)**
+# **Inbox Mover \- the perfect FileButler companion (v0.9.5)**
 
-**Inbox Mover** is a cross-platform utility designed to process files in the **transfer-** folders found in **i:** and **z:\\inbox** on [**myDRE**](https://mydre.org)**.**
+**Inbox Mover** is a cross-platform utility designed to process files in the **transfer-** folders found in **i:** and **z:\\inbox** on [**myDRE**](https://mydre.org)**.** 
 
 **Inbox Mover** processes the files into a designated target folder while automatically resolving file conflicts based on your preferences. Zip-files will be automatically extracted. It features both a modern, user-friendly graphical interface (GUI) and a Command-Line Interface (CLI) for automation.
 
 **Inbox Mover** is optimized to use the **receipt.json** in **myDRE FileButler.**
 
 ![Inbox Mover Screenshot](https://github.com/flow4u/InboxMover/blob/main/InboxMover.png)
+
+
+## **🔌 Developer Plugins (Alpha)**
+
+An alpha version of **inbox\_mover\_plugin.py** and **inbox\_mover\_plugin.R** is now available\!
+
+These plugins act as a lightweight utility to process, extract, and log ZIP files (and standard files) from a specific source folder. They are highly flexible and can be used as a standalone script or seamlessly integrated directly into your own Python and R codebase for automated data pipelines.
 
 ## **🛠️ Prerequisites**
 
@@ -18,8 +25,8 @@ To run Inbox Mover, you need **Python 3** installed on your system. The applicat
 
 1. Go to the official Python website: [python.org/downloads](https://www.python.org/downloads/)  
 2. Download the latest Python 3 installer for Windows.  
-3. Run the installer as Admin.  
-4. **⚠️ CRITICAL STEP:** At the bottom of the installer window, ensure you check the box that says **All users** and **"Add Python to PATH"** before clicking "Install Now".  
+3. Run the installer.  
+4. **⚠️ CRITICAL STEP:** At the bottom of the installer window, ensure you check the box that says **"Add Python to PATH"** before clicking "Install Now".  
 5. *Note: Tkinter is included by default with standard Windows Python installations.*
 
 #### **On Linux (Ubuntu/Debian-based)**
@@ -52,6 +59,14 @@ Because Inbox Mover is a standalone script, "installing" it just means placing i
 ## **🖱️ How to Use (GUI Mode)**
 
 To launch the graphical interface, double-click the shortcut you created on your Desktop.
+
+### **⌨️ Keyboard Support**
+
+Inbox Mover is optimized for speed with robust keyboard navigation:
+
+* **Left / Right Arrows:** Cycle rapidly through the discovered transfer folders without needing to click the Prev/Next buttons.  
+* **Tab / Shift-Tab:** Instantly toggle focus between the **PROCESS FOLDER** and **Save Config** buttons (indicated by ► ◄ arrows).  
+* **Enter:** Trigger the currently focused action button immediately.
 
 **UI Controls:** You can adjust the application's appearance using the buttons in the top right:
 
@@ -97,7 +112,8 @@ The application reads the receipt.json file inside the ZIP to identify a **Confi
 
 * **Global Audit Logging:** Every processed file and resolved conflict is written to a machine-readable JSONL file (process\_log.jsonl). Click **'📄 View Log'** to inspect it.  
 * **Local Process Logs:** When a folder is processed successfully (and not deleted), an Inbox Process.log file is dropped directly into the folder (or its new location in the Processed Folder).  
-  * If this file exists, the GUI will dynamically display a **"Latest: \[Timestamp\] SUCCESS"** label.  
+  * If this file exists, the GUI will dynamically display a "Latest:![][image1]  
+    SUCCESS" label.  
   * A **"📄 Process Log"** button will dynamically appear to let you view this specific folder's history in a clean, color-coded modal window.  
 * **Receipt JSON Injection:** For complete traceability, the application will parse the successfully extracted receipt.json and cleanly inject the processing metadata directly into it under a new "processing\_logs" array.  
 * **Receipt Overrides:** If the receipt.json inside the ZIP contains keys like target\_folder, process\_folder, receipt\_folder, conflict\_resolution, or post\_processing, these values will automatically override your GUI settings. The "Save Config" button will turn orange (Save Config \*) to notify you.  
@@ -120,3 +136,5 @@ python inbox\_mover.py \--cli \-s \<search\_folder\_1\> \<search\_folder\_2\> \-
 * \-r, \--receipt-folder: Target folder specifically for the receipt.json file.  
 * \-c, \--conflict-action: Action when extracted file already exists. Choices: overwrite, keep\_both, rename\_existing (Default: overwrite).  
 * \-p, \--post-action: Action to perform after extraction. Choices: leave, delete, move (Default: leave).
+
+[image1]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAmwAAAAuCAYAAACVmkVrAAADQklEQVR4Xu3cXYjmUxwH8NlaeYlsMqWZZ57/PGMyW0pqSEqK3KwLEXLDtUQuhaKsXFAopbjxkrj0kmxeyktYt0Q2W17aDTcuvJRt3KzvWefsnv5py8Vqpv186tf5nd85//9z5u7Xc55mbg4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD+o8lksjgMw6HEwel0eiDj4cRXifdqfn/bm/zn/tkTZXl5+bJxDQDgpJUmbM/8/PyZNT/SpHVrL6eJu/DY7hMvn3dFGrbrx3UAgJNWGqRnWp4GbSPxZTd/P8P2Nv8/pFm7L7FjXAcAYO5Ig1auQG/8l/qrdXyljq+l0Xs+42+TyeT0WjuYRuu8mh9eWVm5oOSpnZb5J9l3Ton2ztR3DvWKdajXrgsLC2ck/6vtqWs3JK6t+aFWz7tW6xmeKmfI+HRiTzlD6reWM9St21ZXV0/N/Ius3T6bzYZuDQBg60iDdXZprMb1Jk3Qg+3qtChNTxqge7v117u178qYRmk++Ub2PZR4NPnV3f5ryjsS+8paqZV9Q9ewJX+sb676fGlpaWG09k3L8+4X2hnq2lVtb8bL++cAALaMNDk3pZHZPa5X27P2bV8oTU+apktLnvH8zO8q+dra2lnJHy95+T3a8ZqjrO1KfNr2ZP9HyT/o1vcm/ujmGy3P3tv6d4/y39sZitJYllrJ89w9xzsTAMCmlaZmf7m+HNeLNDhPJPaVsdWy98Vu/aWWt9/EZf2NDNuy9tlc/R1c8gfavvau2Wx25VC/2SuNVJ6/OfFOuVLNfHfi87p2Z975bIk6/3F0hqPfsCX/voztWjbzXxNf1/yn0mC2vQAAm15peoZj/8Ljl6H7hqvbs7M0UWl0rivzen169Hpz+Kcpa3svLtejqe0q8zRkFyX/IfV3E7d0z7yVeDPxcHlfrT2XZw/kcy4p8/KbttKgpfZ2xjuy/mdq59bP2d+fIXvubnn5rHKGNq9/2yOJjxcXFyetDgDAJpFG7cNxDQCATWJ9ff2U6XT65LgOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAsFX8DV7TuYPnroNBAAAAAElFTkSuQmCC>
