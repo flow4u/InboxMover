@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Inbox Mover Plugin
-------------------
+Inbox Mover Plugin (v0.0.2)
+---------------------------
 A utility to process, extract, and log ZIP files (and standard files) from a specific source folder.
 
 🌱 ALPHA VERSION NOTICE
@@ -19,7 +19,8 @@ USAGE AS A PLUGIN:
         "processed_folder": "/path/to/move/completed/source",
         "receipt_folder": "/path/to/save/receipts",
         "conflict_resolution": "rename_existing",
-        "post_processing": "move"
+        "post_processing": "move",
+        "auto_unzip": True
     }
 
     result = im("/path/to/source_folder", config)
@@ -35,6 +36,7 @@ CONFIG DICTIONARY / JSON STRUCTURE:
         "receipt_folder": "str"      -> (Optional) Specific folder to place the extracted receipt.json.
         "conflict_resolution": "str" -> (Optional) 'overwrite' (default), 'keep_both', or 'rename_existing'.
         "post_processing": "str"     -> (Optional) 'leave' (default), 'delete', or 'move'.
+        "auto_unzip": "bool"         -> (Optional) True to extract ZIPs, False to copy them as-is (default: True).
     }
 
 EXAMPLE config.json:
@@ -43,7 +45,8 @@ EXAMPLE config.json:
         "processed_folder": "C:/data/archived_zips",
         "receipt_folder": "C:/data/receipts",
         "conflict_resolution": "keep_both",
-        "post_processing": "move"
+        "post_processing": "move",
+        "auto_unzip": true
     }
 
 OVERRIDES:
@@ -70,7 +73,8 @@ class InboxProcessor:
             "processed_folder": config.get("processed_folder"),
             "receipt_folder": config.get("receipt_folder"),
             "conflict_resolution": config.get("conflict_resolution", "overwrite"),
-            "post_processing": config.get("post_processing", "leave")
+            "post_processing": config.get("post_processing", "leave"),
+            "auto_unzip": config.get("auto_unzip", True)
         }
         self.actions_log = []
 
@@ -197,11 +201,12 @@ class InboxProcessor:
             "process_folder": "processed_folder",    # legacy receipt key support
             "receipt_folder": "receipt_folder",
             "conflict_resolution": "conflict_resolution",
-            "post_processing": "post_processing"
+            "post_processing": "post_processing",
+            "auto_unzip": "auto_unzip"
         }
         
         for receipt_key, config_key in override_mapping.items():
-            if receipt_data.get(receipt_key):
+            if receipt_key in receipt_data:
                 merged[config_key] = receipt_data[receipt_key]
                 
         return merged
@@ -263,10 +268,24 @@ class InboxProcessor:
         return extracted_path
 
     def _process_files(self, folder_data, config):
-        """Extract valid ZIP or copy loose files."""
+        """Extract valid ZIP or copy loose files depending on auto_unzip configuration."""
         target_folder = config["target_folder"]
         receipt_folder = config.get("receipt_folder")
         conflict_res = config["conflict_resolution"]
+        auto_unzip = config.get("auto_unzip", True)
+
+        def _copy_file(src_path, base_folder_path, folder_name):
+            rel_path = os.path.relpath(src_path, base_folder_path)
+            ext_path = os.path.join(target_folder, rel_path)
+            os.makedirs(os.path.dirname(ext_path), exist_ok=True)
+            final_path = self._get_final_path(ext_path, conflict_res)
+            
+            shutil.copy2(src_path, final_path)
+            self.actions_log.append({
+                "type": "copy",
+                "source": f"{folder_name} -> {rel_path}",
+                "destination": final_path
+            })
 
         def _extract_zip(zip_path):
             zip_filename = os.path.basename(zip_path)
@@ -306,27 +325,22 @@ class InboxProcessor:
 
         # Logic fork: process zip or loose files
         if folder_data.get('has_valid_zip') and folder_data.get('zip_path'):
-            _extract_zip(folder_data['zip_path'])
+            if auto_unzip:
+                _extract_zip(folder_data['zip_path'])
+            else:
+                folder_path = folder_data['folder_path']
+                folder_name = folder_data['folder_name']
+                _copy_file(folder_data['zip_path'], folder_path, folder_name)
         else:
             folder_path = folder_data['folder_path']
             folder_name = folder_data['folder_name']
             for root, _, files in os.walk(folder_path):
                 for file in files:
                     src_path = os.path.join(root, file)
-                    if file.lower().endswith('.zip'):
+                    if file.lower().endswith('.zip') and auto_unzip:
                         _extract_zip(src_path)
                     else:
-                        rel_path = os.path.relpath(src_path, folder_path)
-                        ext_path = os.path.join(target_folder, rel_path)
-                        os.makedirs(os.path.dirname(ext_path), exist_ok=True)
-                        final_path = self._get_final_path(ext_path, conflict_res)
-                        
-                        shutil.copy2(src_path, final_path)
-                        self.actions_log.append({
-                            "type": "copy",
-                            "source": f"{folder_name} -> {rel_path}",
-                            "destination": final_path
-                        })
+                        _copy_file(src_path, folder_path, folder_name)
 
     def _apply_post_processing(self, folder_data, config):
         """Apply leave, move, or delete actions to the source folder."""
@@ -458,7 +472,8 @@ def im(source_folder, config):
     :param config: A dictionary containing the configuration keys.
                    Required: 'target_folder'
                    Optional: 'processed_folder', 'receipt_folder', 
-                             'conflict_resolution', 'post_processing'
+                             'conflict_resolution', 'post_processing',
+                             'auto_unzip'
     :return: A dictionary containing processing status and action logs.
     """
     processor = InboxProcessor(config)
@@ -483,7 +498,8 @@ Config JSON Structure:
       "processed_folder": "C:/output/processed_zips",
       "receipt_folder": "C:/output/receipts",
       "conflict_resolution": "rename_existing",
-      "post_processing": "move"
+      "post_processing": "move",
+      "auto_unzip": true
   }
 """
     )

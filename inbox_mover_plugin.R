@@ -1,14 +1,14 @@
 #!/usr/bin/env Rscript
-#' Inbox Mover Plugin
-#' ------------------
+#' Inbox Mover Plugin (v0.0.2)
+#' ---------------------------
 #' A utility to process, extract, and log ZIP files (and standard files) from a specific source folder.
 #' 
-#' 🌱 ALPHA RELEASE NOTICE:
-#'   This plugin is currently in its early alpha stage! While it has been 
-#'   crafted with care, please do not trust it blindly just yet. We warmly 
-#'   recommend testing it thoroughly in a safe, backed-up environment to 
-#'   ensure it does exactly what you need before letting it loose on your 
-#'   important files.
+#' 🌱 ALPHA VERSION NOTICE
+#' Welcome to the Inbox Mover Plugin! Please note that this is an early alpha release. 
+#' While we've designed it to be as helpful and robust as possible, you should not 
+#' implicitly trust it with critical or production data just yet. We warmly encourage 
+#' you to test it thoroughly in a safe, backed-up environment to ensure it behaves 
+#' exactly as you need it to. Happy testing!
 #' 
 #' USAGE AS A PLUGIN:
 #'   source("inbox_mover_plugin.R")
@@ -18,7 +18,8 @@
 #'     processed_folder = "/path/to/move/completed/source",
 #'     receipt_folder = "/path/to/save/receipts",
 #'     conflict_resolution = "rename_existing",
-#'     post_processing = "move"
+#'     post_processing = "move",
+#'     auto_unzip = TRUE
 #'   )
 #'   
 #'   result <- im("/path/to/source_folder", config)
@@ -28,7 +29,27 @@
 #'   Rscript inbox_mover_plugin.R --source "C:/test/source_folder" --config "C:/test/config.json"
 #' 
 #' CONFIG DICTIONARY / JSON STRUCTURE:
-#'   Same as Python version. All options apply.
+#'   target_folder: str        -> (Required) Where contents are extracted/copied.
+#'   processed_folder: str     -> (Optional) Where the source folder is moved if post_processing is 'move'.
+#'   receipt_folder: str       -> (Optional) Specific folder to place the extracted receipt.json.
+#'   conflict_resolution: str  -> (Optional) 'overwrite' (default), 'keep_both', or 'rename_existing'.
+#'   post_processing: str      -> (Optional) 'leave' (default), 'delete', or 'move'.
+#'   auto_unzip: bool          -> (Optional) TRUE to extract ZIPs, FALSE to copy them as-is (default: TRUE).
+#' 
+#' EXAMPLE config.json:
+#'   {
+#'       "target_folder": "C:/data/extracted",
+#'       "processed_folder": "C:/data/archived_zips",
+#'       "receipt_folder": "C:/data/receipts",
+#'       "conflict_resolution": "keep_both",
+#'       "post_processing": "move",
+#'       "auto_unzip": true
+#'   }
+#' 
+#' OVERRIDES:
+#'   If a `receipt.json` file is found inside the source ZIP, the plugin will read it. 
+#'   If keys matching the config are found inside `receipt.json` (e.g., "target_folder"), 
+#'   they will OVERRIDE the configuration passed to the plugin.
 
 # Ensure required packages are installed/loaded
 suppressPackageStartupMessages({
@@ -56,7 +77,8 @@ InboxProcessor <- R6Class("InboxProcessor",
         processed_folder = get_val(config, "processed_folder"),
         receipt_folder = get_val(config, "receipt_folder"),
         conflict_resolution = get_val(config, "conflict_resolution", "overwrite"),
-        post_processing = get_val(config, "post_processing", "leave")
+        post_processing = get_val(config, "post_processing", "leave"),
+        auto_unzip = get_val(config, "auto_unzip", TRUE)
       )
       self$actions_log <- list()
     },
@@ -201,7 +223,8 @@ InboxProcessor <- R6Class("InboxProcessor",
         process_folder = "processed_folder", # legacy
         receipt_folder = "receipt_folder",
         conflict_resolution = "conflict_resolution",
-        post_processing = "post_processing"
+        post_processing = "post_processing",
+        auto_unzip = "auto_unzip"
       )
       
       for (receipt_key in names(override_mapping)) {
@@ -281,6 +304,22 @@ InboxProcessor <- R6Class("InboxProcessor",
       target_folder <- config$target_folder
       receipt_folder <- config$receipt_folder
       conflict_res <- config$conflict_resolution
+      auto_unzip <- get_val(config, "auto_unzip", TRUE)
+      
+      copy_file_routine <- function(src_path, base_folder_path, folder_name) {
+        rel_path <- sub(paste0("^", base_folder_path, "[/\\]?"), "", src_path)
+        ext_path <- file.path(target_folder, rel_path)
+        
+        dir.create(dirname(ext_path), recursive = TRUE, showWarnings = FALSE)
+        final_path <- private$get_final_path(ext_path, conflict_res)
+        
+        file.copy(src_path, final_path, overwrite = TRUE)
+        self$actions_log <- append(self$actions_log, list(list(
+          type = "copy",
+          source = paste(folder_name, "->", rel_path),
+          destination = final_path
+        )))
+      }
       
       extract_zip_routine <- function(zip_path) {
         zip_filename <- basename(zip_path)
@@ -323,28 +362,23 @@ InboxProcessor <- R6Class("InboxProcessor",
       
       # Logic fork: process zip or loose files
       if (folder_data$has_valid_zip && !is.null(folder_data$zip_path)) {
-        extract_zip_routine(folder_data$zip_path)
+        if (auto_unzip) {
+          extract_zip_routine(folder_data$zip_path)
+        } else {
+          folder_path <- folder_data$folder_path
+          folder_name <- folder_data$folder_name
+          copy_file_routine(folder_data$zip_path, folder_path, folder_name)
+        }
       } else {
         folder_path <- folder_data$folder_path
         folder_name <- folder_data$folder_name
         
         src_files <- list.files(folder_path, recursive = TRUE, full.names = TRUE)
         for (src_path in src_files) {
-          if (grepl("\\.zip$", src_path, ignore.case = TRUE)) {
+          if (grepl("\\.zip$", src_path, ignore.case = TRUE) && auto_unzip) {
             extract_zip_routine(src_path)
           } else {
-            rel_path <- sub(paste0("^", folder_path, "[/\\]?"), "", src_path)
-            ext_path <- file.path(target_folder, rel_path)
-            
-            dir.create(dirname(ext_path), recursive = TRUE, showWarnings = FALSE)
-            final_path <- private$get_final_path(ext_path, conflict_res)
-            
-            file.copy(src_path, final_path, overwrite = TRUE)
-            self$actions_log <- append(self$actions_log, list(list(
-              type = "copy",
-              source = paste(folder_name, "->", rel_path),
-              destination = final_path
-            )))
+            copy_file_routine(src_path, folder_path, folder_name)
           }
         }
       }
@@ -495,6 +529,7 @@ InboxProcessor <- R6Class("InboxProcessor",
 #' 
 #' @param source_folder A string path to the directory to process.
 #' @param config A list containing the configuration keys.
+#'               Optional keys include 'auto_unzip'.
 #' @return A list containing processing status and action logs.
 im <- function(source_folder, config) {
   processor <- InboxProcessor$new(config)
@@ -519,10 +554,12 @@ if (!interactive() && identical(environment(), globalenv())) {
     option_list=option_list, 
     description="Inbox Mover Plugin CLI",
     epilogue="
-🌱 ALPHA RELEASE NOTICE:
-  This plugin is currently in its early alpha stage! Please test it 
-  thoroughly in a safe environment to ensure it meets your needs 
-  before using it on critical files.
+🌱 ALPHA VERSION NOTICE
+  Welcome to the Inbox Mover Plugin! Please note that this is an early alpha release. 
+  While we've designed it to be as helpful and robust as possible, you should not 
+  implicitly trust it with critical or production data just yet. We warmly encourage 
+  you to test it thoroughly in a safe, backed-up environment to ensure it behaves 
+  exactly as you need it to. Happy testing!
 
 Example Usage:
   Rscript inbox_mover_plugin.R --source \"C:/transfer-123\" --config \"C:/config.json\"
@@ -533,7 +570,8 @@ Config JSON Structure:
       \"processed_folder\": \"C:/output/processed_zips\",
       \"receipt_folder\": \"C:/output/receipts\",
       \"conflict_resolution\": \"rename_existing\",
-      \"post_processing\": \"move\"
+      \"post_processing\": \"move\",
+      \"auto_unzip\": true
   }
 "
   )

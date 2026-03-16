@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Inbox Mover v0.9.7
+Inbox Mover v0.9.9
 the perfect FileButler companion
 A utility to process and extract zip files containing a receipt.json,
 with both a Material-inspired GUI and a CLI mode.
@@ -24,7 +24,7 @@ import fnmatch
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
-VERSION = "0.9.7"
+VERSION = "0.9.9"
 CONFIG_DIR = "permit_configs"
 
 # --------------------------------------------------------------------------- #
@@ -286,6 +286,7 @@ class InboxMoverCore:
         post_action = config.get('post_action', 'leave')
         target_zip_folder = config.get('target_zip_folder')
         receipt_folder = config.get('receipt_folder')
+        auto_extract = config.get('auto_extract', True)
         
         actions_log = []
 
@@ -372,22 +373,30 @@ class InboxMoverCore:
                 for i, zinfo in enumerate(file_list):
                     original_name = zinfo.filename
                     
+                    # Clean the path and check if it starts with a 'transfer-' root folder
+                    safe_name = original_name.lstrip('/\\')
+                    parts = safe_name.replace('\\', '/').split('/')
+                    
+                    if len(parts) > 0 and parts[0].lower().startswith('transfer-'):
+                        if len(parts) == 1:
+                            continue # Skip the empty root directory itself
+                        safe_name = '/'.join(parts[1:]) # Strip the transfer- folder from the path
+                    
                     is_absolute = original_name.startswith('/') or original_name.startswith('\\') or (len(original_name) >= 3 and original_name[1] == ':' and original_name[2] in ('/', '\\'))
                     
                     if original_name.lower().endswith('receipt.json'):
                         timestamp = datetime.datetime.now().strftime("%y%m%d-%H%M%S")
-                        new_filename = f"{timestamp}-{os.path.basename(original_name)}"
+                        new_filename = f"{timestamp}-{os.path.basename(safe_name)}"
                         if receipt_folder and os.path.isdir(receipt_folder):
                             ext_path = os.path.join(receipt_folder, new_filename)
                         elif is_absolute:
                             ext_path = os.path.join(os.path.dirname(original_name), new_filename)
                         else:
-                            ext_path = os.path.join(target_folder, os.path.dirname(original_name.lstrip('/\\')), new_filename)
+                            ext_path = os.path.join(target_folder, os.path.dirname(safe_name), new_filename)
                     else:
                         if is_absolute:
                             ext_path = original_name
                         else:
-                            safe_name = original_name.lstrip('/\\')
                             ext_path = os.path.join(target_folder, safe_name)
                             
                     os.makedirs(os.path.dirname(ext_path), exist_ok=True)
@@ -406,7 +415,7 @@ class InboxMoverCore:
                         progress_callback(i + 1, total)
 
         try:
-            if folder_data.get('has_valid_zip') and folder_data.get('zip_path'):
+            if auto_extract and folder_data.get('has_valid_zip') and folder_data.get('zip_path'):
                 extract_zip_file(folder_data['zip_path'])
             else:
                 folder_path = folder_data.get('folder_path')
@@ -414,7 +423,7 @@ class InboxMoverCore:
                 for root, _, files in os.walk(folder_path):
                     for file in files:
                         src_path = os.path.join(root, file)
-                        if file.lower().endswith('.zip'):
+                        if auto_extract and file.lower().endswith('.zip'):
                             extract_zip_file(src_path)
                         else:
                             rel_path = os.path.relpath(src_path, folder_path)
@@ -503,6 +512,7 @@ class InboxMoverGUI:
         self.conflict_action_var = tk.StringVar(value="overwrite")
         self.post_action_var = tk.StringVar(value="leave")
         self.active_pattern_var = tk.StringVar(value="")
+        self.auto_extract_var = tk.BooleanVar(value=True)
         
         self.inbox_name_var = tk.StringVar(value="")
         self.zip_name_var = tk.StringVar(value="No Transfer Folders Found")
@@ -516,6 +526,7 @@ class InboxMoverGUI:
         self.conflict_action_var.trace_add("write", self.check_unsaved_changes)
         self.post_action_var.trace_add("write", self.check_unsaved_changes)
         self.active_pattern_var.trace_add("write", self.check_unsaved_changes)
+        self.auto_extract_var.trace_add("write", self.check_unsaved_changes)
 
         self.setup_ui()
         self.apply_theme()
@@ -629,14 +640,23 @@ class InboxMoverGUI:
         card_options = ttk.Frame(self.card_frame, style="Card.TFrame")
         card_options.pack(fill=tk.X, pady=(0, 15))
         
-        conflict_col = ttk.Frame(card_options, style="Card.TFrame")
+        # New options top row for Checkboxes
+        options_top = ttk.Frame(card_options, style="Card.TFrame")
+        options_top.pack(fill=tk.X, pady=(0, 10))
+        ttk.Checkbutton(options_top, text="Auto-Extract ZIP files", variable=self.auto_extract_var, style="Card.TCheckbutton", takefocus=0).pack(anchor=tk.W)
+
+        # Existing columns
+        options_columns = ttk.Frame(card_options, style="Card.TFrame")
+        options_columns.pack(fill=tk.X)
+        
+        conflict_col = ttk.Frame(options_columns, style="Card.TFrame")
         conflict_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         ttk.Label(conflict_col, text="Conflict Resolution:", style="CardHeader.TLabel").pack(anchor=tk.W, pady=(0, 5))
         ttk.Radiobutton(conflict_col, text="Overwrite existing file", variable=self.conflict_action_var, value="overwrite", style="Card.TRadiobutton", takefocus=0).pack(anchor=tk.W)
         ttk.Radiobutton(conflict_col, text="Keep both (add number)", variable=self.conflict_action_var, value="keep_both", style="Card.TRadiobutton", takefocus=0).pack(anchor=tk.W)
         ttk.Radiobutton(conflict_col, text="Rename existing file", variable=self.conflict_action_var, value="rename_existing", style="Card.TRadiobutton", takefocus=0).pack(anchor=tk.W)
 
-        post_col = ttk.Frame(card_options, style="Card.TFrame")
+        post_col = ttk.Frame(options_columns, style="Card.TFrame")
         post_col.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         ttk.Label(post_col, text="Post Processing:", style="CardHeader.TLabel").pack(anchor=tk.W, pady=(0, 5))
         ttk.Radiobutton(post_col, text="Leave the files in place", variable=self.post_action_var, value="leave", style="Card.TRadiobutton", takefocus=0).pack(anchor=tk.W)
@@ -849,6 +869,8 @@ class InboxMoverGUI:
         style.configure("CardAccent.TLabel", background=card_bg, foreground=fg_accent)
         style.configure("Card.TRadiobutton", background=card_bg, foreground=fg_color)
         style.map("Card.TRadiobutton", background=[('active', card_bg)])
+        style.configure("Card.TCheckbutton", background=card_bg, foreground=fg_color)
+        style.map("Card.TCheckbutton", background=[('active', card_bg)])
 
         # Entries and Texts
         style.configure("TEntry", fieldbackground=entry_bg, foreground=fg_color, bordercolor=entry_border, lightcolor=entry_border, darkcolor=entry_border)
@@ -1210,6 +1232,7 @@ You can also run this application via the command line for automation. Run `pyth
         self.conflict_action_var.set("overwrite")
         self.post_action_var.set("leave")
         self.active_pattern_var.set("")
+        self.auto_extract_var.set(True)
 
         # 1. Base Fallback: DEFAULT config
         default_config = self.core.load_config("DEFAULT")
@@ -1219,6 +1242,7 @@ You can also run this application via the command line for automation. Run `pyth
             if default_config.get('receipt_folder'): self.receipt_folder_var.set(default_config['receipt_folder'])
             if default_config.get('conflict_action'): self.conflict_action_var.set(default_config['conflict_action'])
             if default_config.get('post_action'): self.post_action_var.set(default_config['post_action'])
+            if 'auto_extract' in default_config: self.auto_extract_var.set(default_config['auto_extract'])
 
         # 2. Pattern Match (Subordinate to explicit Permit ID)
         matched_pattern = None
@@ -1233,6 +1257,7 @@ You can also run this application via the command line for automation. Run `pyth
                     if p_config.get('receipt_folder'): self.receipt_folder_var.set(p_config['receipt_folder'])
                     if p_config.get('conflict_action'): self.conflict_action_var.set(p_config['conflict_action'])
                     if p_config.get('post_action'): self.post_action_var.set(p_config['post_action'])
+                    if 'auto_extract' in p_config: self.auto_extract_var.set(p_config['auto_extract'])
                     break # Stop at first matched pattern
 
         # 3. Config ID (Overrides Pattern Match)
@@ -1244,6 +1269,7 @@ You can also run this application via the command line for automation. Run `pyth
                 if specific_config.get('receipt_folder'): self.receipt_folder_var.set(specific_config['receipt_folder'])
                 if specific_config.get('conflict_action'): self.conflict_action_var.set(specific_config['conflict_action'])
                 if specific_config.get('post_action'): self.post_action_var.set(specific_config['post_action'])
+                if 'auto_extract' in specific_config: self.auto_extract_var.set(specific_config['auto_extract'])
             
         # 4. Receipt Overrides (Highest Priority)
         receipt = current_data.get('receipt') or {}
@@ -1252,6 +1278,7 @@ You can also run this application via the command line for automation. Run `pyth
         if receipt.get('receipt_folder'): self.receipt_folder_var.set(receipt.get('receipt_folder'))
         if receipt.get('conflict_resolution'): self.conflict_action_var.set(receipt.get('conflict_resolution'))
         if receipt.get('post_processing'): self.post_action_var.set(receipt.get('post_processing'))
+        if 'auto_extract' in receipt: self.auto_extract_var.set(receipt.get('auto_extract'))
             
         self.update_nav_buttons()
         self.check_unsaved_changes()
@@ -1328,7 +1355,8 @@ You can also run this application via the command line for automation. Run `pyth
             "target_zip_folder": self.target_zip_folder_var.get(),
             "receipt_folder": self.receipt_folder_var.get(),
             "conflict_action": self.conflict_action_var.get(),
-            "post_action": self.post_action_var.get()
+            "post_action": self.post_action_var.get(),
+            "auto_extract": self.auto_extract_var.get()
         }
 
         is_unsaved = False
@@ -1343,7 +1371,7 @@ You can also run this application via the command line for automation. Run `pyth
         else:
             saved_config = self.core.load_config(permit_id)
             if saved_config is None:
-                empty_config = {"target_folder": "", "target_zip_folder": "", "receipt_folder": "", "conflict_action": "overwrite", "post_action": "leave"}
+                empty_config = {"target_folder": "", "target_zip_folder": "", "receipt_folder": "", "conflict_action": "overwrite", "post_action": "leave", "auto_extract": True}
                 if current_config != empty_config: is_unsaved = True
             else:
                 if current_config != saved_config: is_unsaved = True
@@ -1378,7 +1406,8 @@ You can also run this application via the command line for automation. Run `pyth
             "target_zip_folder": self.target_zip_folder_var.get(),
             "receipt_folder": self.receipt_folder_var.get(),
             "conflict_action": self.conflict_action_var.get(),
-            "post_action": self.post_action_var.get()
+            "post_action": self.post_action_var.get(),
+            "auto_extract": self.auto_extract_var.get()
         }
         
         active_pattern = self.active_pattern_var.get().strip()
@@ -1404,7 +1433,8 @@ You can also run this application via the command line for automation. Run `pyth
             "target_zip_folder": self.target_zip_folder_var.get(),
             "receipt_folder": self.receipt_folder_var.get(),
             "conflict_action": self.conflict_action_var.get(),
-            "post_action": self.post_action_var.get()
+            "post_action": self.post_action_var.get(),
+            "auto_extract": self.auto_extract_var.get()
         }
 
         if not config['target_folder']:
@@ -1478,8 +1508,15 @@ You can also run this application via the command line for automation. Run `pyth
         else:
             return
 
+        # Safely check focus (prevents KeyError when a messagebox pops up)
+        has_focus = False
+        try:
+            has_focus = (self.root.focus_get() == btn)
+        except (KeyError, tk.TclError):
+            has_focus = False
+
         # Inject focus arrows if button is currently selected
-        if self.root.focus_get() == btn and str(btn.cget('state')) == 'normal':
+        if has_focus and str(btn.cget('state')) == 'normal':
             btn.config(text=f"► {base_text} ◄")
         else:
             btn.config(text=base_text)
@@ -1498,6 +1535,7 @@ def run_cli():
     parser.add_argument('-r', '--receipt-folder', help='Target folder for the receipt.json file')
     parser.add_argument('-c', '--conflict-action', choices=['overwrite', 'keep_both', 'rename_existing'], default='overwrite', help='Action when extracted file already exists')
     parser.add_argument('-p', '--post-action', choices=['leave', 'delete', 'move'], default='leave', help='Action to perform on zip after extraction')
+    parser.add_argument('--no-auto-extract', action='store_false', dest='auto_extract', help='Disable automatic zip extraction and instead copy the raw zip file.')
     
     args = parser.parse_args()
 
@@ -1522,7 +1560,8 @@ def run_cli():
             "target_zip_folder": args.target_zip_folder,
             "receipt_folder": args.receipt_folder,
             "conflict_action": args.conflict_action,
-            "post_action": args.post_action
+            "post_action": args.post_action,
+            "auto_extract": args.auto_extract
         }
         
         default_config = core.load_config("DEFAULT")
@@ -1546,6 +1585,7 @@ def run_cli():
         if receipt.get('receipt_folder'): config['receipt_folder'] = receipt.get('receipt_folder')
         if receipt.get('conflict_resolution'): config['conflict_action'] = receipt.get('conflict_resolution')
         if receipt.get('post_processing'): config['post_action'] = receipt.get('post_processing')
+        if 'auto_extract' in receipt: config['auto_extract'] = receipt.get('auto_extract')
 
         if config.get('post_action') == 'move' and not config.get('target_zip_folder'):
             error_msg = "Post action is 'move' but no Processed Folder specified. Skipping."

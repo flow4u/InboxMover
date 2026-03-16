@@ -1,4 +1,4 @@
-# **Inbox Mover \- the perfect FileButler companion (v0.9.7)**
+# **Inbox Mover \- the perfect FileButler companion (v0.9.9)**
 
 **Inbox Mover** is a cross-platform utility designed to process files in the **transfer-** folders found in **i:** and **z:\\inbox** on [**myDRE**](https://mydre.org)**.** 
 
@@ -72,7 +72,7 @@ Inbox Mover is optimized for speed with robust keyboard navigation:
 * **☀ / ☾:** Toggle between Light and Dark mode.  
 * **?:** Open the formatted Markdown Help Menu.  
 * **A+ / A-:** Increase or decrease the application font size.  
-* **Reset View:** Snap the window back to its default size (1100x950) and default font size (11).
+* **Reset View:** Snap the window back to its default size (1120x950) and default font size (11).
 
 ### **1\. Directories**
 
