@@ -1,13 +1,10 @@
-# **Inbox Mover \- the perfect FileButler companion (v0.9.5)**
+# **Inbox Mover \- the perfect FileButler companion (v0.9.7)**
 
 **Inbox Mover** is a cross-platform utility designed to process files in the **transfer-** folders found in **i:** and **z:\\inbox** on [**myDRE**](https://mydre.org)**.** 
 
 **Inbox Mover** processes the files into a designated target folder while automatically resolving file conflicts based on your preferences. Zip-files will be automatically extracted. It features both a modern, user-friendly graphical interface (GUI) and a Command-Line Interface (CLI) for automation.
 
 **Inbox Mover** is optimized to use the **receipt.json** in **myDRE FileButler.**
-
-![Inbox Mover Screenshot](https://github.com/flow4u/InboxMover/blob/main/InboxMover.png)
-
 
 ## **🔌 Developer Plugins (Alpha)**
 
@@ -108,7 +105,16 @@ The application reads the receipt.json file inside the ZIP to identify a **Confi
 * Once you set up your folders and rules for a specific Config ID, click **'Save Config'**.  
 * The next time you encounter a transfer folder with that exact Config ID, the application will automatically load your saved folder paths and settings over the DEFAULT baseline.
 
-### **6\. Advanced Logging & Overrides**
+### **6\. Auto-Match Pattern (Filename Routing)**
+
+If a transfer folder doesn't have a receipt.json but contains specific files (like database dumps or logs), you can route it based on a filename pattern.
+
+* **How to use:** Enter a wildcard pattern like backup\*.sql in the **Auto-Match Pattern** field.  
+* Configure your desired Target Folder and post-actions, then click **Save Config**.  
+* The next time a transfer folder contains any file matching that pattern (e.g., backup\_2026.sql), the application will automatically detect it and load those specific settings\!  
+* *Note: Pattern matching is subordinate to a valid Config ID but overrides the DEFAULT config baseline.*
+
+### **7\. Advanced Logging & Overrides**
 
 * **Global Audit Logging:** Every processed file and resolved conflict is written to a machine-readable JSONL file (process\_log.jsonl). Click **'📄 View Log'** to inspect it.  
 * **Local Process Logs:** When a folder is processed successfully (and not deleted), an Inbox Process.log file is dropped directly into the folder (or its new location in the Processed Folder).  

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Inbox Mover v0.9
+Inbox Mover v0.9.7
 the perfect FileButler companion
 A utility to process and extract zip files containing a receipt.json,
 with both a Material-inspired GUI and a CLI mode.
@@ -18,12 +18,13 @@ import threading
 import subprocess
 import getpass
 import re
+import fnmatch
 
 # Tkinter imports
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
-VERSION = "0.9"
+VERSION = "0.9.7"
 CONFIG_DIR = "permit_configs"
 
 # --------------------------------------------------------------------------- #
@@ -88,13 +89,17 @@ class InboxMoverCore:
             "receipt": None,
             "receipt_raw": "",
             "has_valid_zip": False,
-            "can_process": False
+            "can_process": False,
+            "file_list": []
         }
         
         valid_zip_found = False
+        file_list = []
         for root, _, files in os.walk(folder_path):
             for file in files:
-                if file.lower().endswith('.zip'):
+                rel_file = os.path.relpath(os.path.join(root, file), folder_path)
+                file_list.append(rel_file)
+                if file.lower().endswith('.zip') and not valid_zip_found:
                     zip_path = os.path.join(root, file)
                     zip_info = self.inspect_zip(zip_path)
                     if zip_info and zip_info.get("receipt_raw"):
@@ -105,22 +110,15 @@ class InboxMoverCore:
                         data["has_valid_zip"] = True
                         data["can_process"] = True
                         valid_zip_found = True
-                        break
-            if valid_zip_found:
-                break
-                
+        
+        data["file_list"] = file_list
+        
         if not valid_zip_found:
-            file_list = []
-            for root, _, files in os.walk(folder_path):
-                for f in sorted(files):
-                    rel_file = os.path.relpath(os.path.join(root, f), folder_path)
-                    file_list.append(rel_file)
-            
             if not file_list:
                 data["receipt_raw"] = "<Folder is empty>"
                 data["can_process"] = False
             else:
-                data["receipt_raw"] = "NO RECEIPT.JSON FOUND.\nWILL PROCESS ALL FILES IN FOLDER:\n\n" + "\n".join(file_list)
+                data["receipt_raw"] = "NO RECEIPT.JSON FOUND.\nWILL PROCESS ALL FILES IN FOLDER:\n\n" + "\n".join(sorted(file_list))
                 data["can_process"] = True
                 
         return data
@@ -172,6 +170,25 @@ class InboxMoverCore:
         config_path = os.path.join(CONFIG_DIR, f"{permit_id}.json")
         with open(config_path, 'w') as f:
             json.dump(config_data, f, indent=4)
+
+    def load_patterns(self):
+        """Load the pattern matching configurations."""
+        patterns_path = os.path.join(CONFIG_DIR, "patterns.json")
+        if os.path.exists(patterns_path):
+            try:
+                with open(patterns_path, 'r') as f:
+                    return json.load(f)
+            except Exception:
+                return {}
+        return {}
+
+    def save_pattern(self, pattern, config_data):
+        """Save a configuration for a specific file pattern."""
+        patterns = self.load_patterns()
+        patterns[pattern] = config_data
+        patterns_path = os.path.join(CONFIG_DIR, "patterns.json")
+        with open(patterns_path, 'w') as f:
+            json.dump(patterns, f, indent=4)
 
     def write_log(self, status, folder_data, config, actions, message=""):
         """Write a structured JSON log entry."""
@@ -485,6 +502,7 @@ class InboxMoverGUI:
         
         self.conflict_action_var = tk.StringVar(value="overwrite")
         self.post_action_var = tk.StringVar(value="leave")
+        self.active_pattern_var = tk.StringVar(value="")
         
         self.inbox_name_var = tk.StringVar(value="")
         self.zip_name_var = tk.StringVar(value="No Transfer Folders Found")
@@ -497,6 +515,7 @@ class InboxMoverGUI:
         self.receipt_folder_var.trace_add("write", self.check_unsaved_changes)
         self.conflict_action_var.trace_add("write", self.check_unsaved_changes)
         self.post_action_var.trace_add("write", self.check_unsaved_changes)
+        self.active_pattern_var.trace_add("write", self.check_unsaved_changes)
 
         self.setup_ui()
         self.apply_theme()
@@ -597,6 +616,14 @@ class InboxMoverGUI:
         self.lbl_inbox_name.pack(anchor=tk.W)
         self.lbl_last_processed = ttk.Label(card_info, textvariable=self.last_processed_var, style="CardAccent.TLabel")
         self.lbl_last_processed.pack(anchor=tk.W, pady=(5, 0))
+
+        # Pattern Matcher Input
+        pattern_frame = ttk.Frame(card_info, style="Card.TFrame")
+        pattern_frame.pack(anchor=tk.W, pady=(5, 0), fill=tk.X)
+        ttk.Label(pattern_frame, text="Auto-Match Pattern:", style="Card.TLabel").pack(side=tk.LEFT, padx=(0, 5))
+        self.entry_pattern = ttk.Entry(pattern_frame, textvariable=self.active_pattern_var, width=30, takefocus=0)
+        self.entry_pattern.pack(side=tk.LEFT)
+        ttk.Label(pattern_frame, text="(e.g., backup*.*)", style="CardDim.TLabel").pack(side=tk.LEFT, padx=(5, 0))
 
         # Card Options
         card_options = ttk.Frame(self.card_frame, style="Card.TFrame")
@@ -1037,6 +1064,12 @@ class InboxMoverGUI:
 ## Overview
 Inbox Mover processes ZIP files (typically containing a `receipt.json`) by extracting them into a designated target folder while resolving file conflicts automatically.
 
+## ⌨️ Keyboard Support
+Inbox Mover is optimized for speed using keyboard shortcuts:
+* **Left / Right Arrows:** Quickly cycle through the found transfer folders without using the mouse.
+* **Tab / Shift-Tab:** Switch focus instantly between the primary **PROCESS FOLDER** and **Save Config** buttons.
+* **Enter:** Activate the currently highlighted action button.
+
 ## 1. Directories
 * **Search Folder 1 & 2:** The root directories where the app looks for child folders starting with `transfer-`. You can specify up to two search locations.
 * **Target Folder:** The directory where the contents of the ZIP will be extracted.
@@ -1063,7 +1096,14 @@ Inbox Mover processes ZIP files (typically containing a `receipt.json`) by extra
 * If you set up your folders and rules for a specific Config ID, click **Save Config**.
 * The next time you encounter a ZIP with that exact Config ID, the application will automatically load your saved folder paths and conflict/post-action settings.
 
-## 6. Advanced Features (Overrides & Paths)
+## 6. Auto-Match Pattern (Filename Routing)
+If a transfer folder doesn't have a `receipt.json` but contains specific files (like database dumps or logs), you can route it based on a filename pattern.
+* **How to use:** Enter a wildcard pattern like `backup*.sql` in the **Auto-Match Pattern** field.
+* Configure your desired Target Folder and post-actions, then click **Save Config**.
+* The next time a transfer folder contains any file matching that pattern (e.g., `backup_2026.sql`), the application will automatically detect it and load those specific settings!
+* *Note: Pattern matching is subordinate to a valid Config ID but overrides the DEFAULT config baseline.*
+
+## 7. Advanced Features (Overrides & Paths)
 * **Absolute Paths:** If a file inside the ZIP is mapped to an absolute path (e.g., `C:\\logs\\file.txt`), it ignores the Target Folder and extracts directly to that path, creating folders as needed.
 * **Receipt Overrides:** If `receipt.json` contains keys like `target_folder`, `process_folder`, `receipt_folder`, `conflict_resolution`, or `post_processing`, these will automatically override your saved GUI settings. The **Save Config** button will turn orange to indicate unsaved changes forced by the receipt.
 * **Processing Log:** The application automatically logs every extracted file, moved file, conflict rename, and post-processing action into a machine-readable JSONL file. Click **📄 View Log** to open it in a readable window, or **📂 Log Folder** to browse the files directly.
@@ -1130,6 +1170,7 @@ You can also run this application via the command line for automation. Run `pyth
         self.zip_name_var.set("No Transfer Folders Found")
         self.permit_id_var.set("")
         self.last_processed_var.set("")
+        self.active_pattern_var.set("")
         self.nav_count_var.set("[ 0 / 0 ]")
         self.set_receipt_text("")
         self.update_nav_buttons()
@@ -1168,7 +1209,9 @@ You can also run this application via the command line for automation. Run `pyth
         self.receipt_folder_var.set("")
         self.conflict_action_var.set("overwrite")
         self.post_action_var.set("leave")
+        self.active_pattern_var.set("")
 
+        # 1. Base Fallback: DEFAULT config
         default_config = self.core.load_config("DEFAULT")
         if default_config:
             if default_config.get('target_folder'): self.target_folder_var.set(default_config['target_folder'])
@@ -1177,6 +1220,22 @@ You can also run this application via the command line for automation. Run `pyth
             if default_config.get('conflict_action'): self.conflict_action_var.set(default_config['conflict_action'])
             if default_config.get('post_action'): self.post_action_var.set(default_config['post_action'])
 
+        # 2. Pattern Match (Subordinate to explicit Permit ID)
+        matched_pattern = None
+        if current_data['permitId'] == "DEFAULT" and current_data['file_list']:
+            patterns = self.core.load_patterns()
+            for pattern, p_config in patterns.items():
+                if any(fnmatch.fnmatch(f, pattern) for f in current_data['file_list']):
+                    matched_pattern = pattern
+                    self.active_pattern_var.set(pattern)
+                    if p_config.get('target_folder'): self.target_folder_var.set(p_config['target_folder'])
+                    if p_config.get('target_zip_folder'): self.target_zip_folder_var.set(p_config['target_zip_folder'])
+                    if p_config.get('receipt_folder'): self.receipt_folder_var.set(p_config['receipt_folder'])
+                    if p_config.get('conflict_action'): self.conflict_action_var.set(p_config['conflict_action'])
+                    if p_config.get('post_action'): self.post_action_var.set(p_config['post_action'])
+                    break # Stop at first matched pattern
+
+        # 3. Config ID (Overrides Pattern Match)
         if current_data['permitId'] != "DEFAULT":
             specific_config = self.core.load_config(current_data['permitId'])
             if specific_config:
@@ -1186,6 +1245,7 @@ You can also run this application via the command line for automation. Run `pyth
                 if specific_config.get('conflict_action'): self.conflict_action_var.set(specific_config['conflict_action'])
                 if specific_config.get('post_action'): self.post_action_var.set(specific_config['post_action'])
             
+        # 4. Receipt Overrides (Highest Priority)
         receipt = current_data.get('receipt') or {}
         if receipt.get('target_folder'): self.target_folder_var.set(receipt.get('target_folder'))
         if receipt.get('process_folder'): self.target_zip_folder_var.set(receipt.get('process_folder'))
@@ -1263,7 +1323,6 @@ You can also run this application via the command line for automation. Run `pyth
             self.refresh_btn_text(self.btn_save_config)
             return
             
-        saved_config = self.core.load_config(permit_id)
         current_config = {
             "target_folder": self.target_folder_var.get(),
             "target_zip_folder": self.target_zip_folder_var.get(),
@@ -1273,11 +1332,21 @@ You can also run this application via the command line for automation. Run `pyth
         }
 
         is_unsaved = False
-        if saved_config is None:
-            empty_config = {"target_folder": "", "target_zip_folder": "", "receipt_folder": "", "conflict_action": "overwrite", "post_action": "leave"}
-            if current_config != empty_config: is_unsaved = True
+        active_pattern = self.active_pattern_var.get().strip()
+        
+        # Determine comparison baseline based on what we are saving to
+        if active_pattern:
+            patterns = self.core.load_patterns()
+            saved_config = patterns.get(active_pattern)
+            if saved_config != current_config:
+                is_unsaved = True
         else:
-            if current_config != saved_config: is_unsaved = True
+            saved_config = self.core.load_config(permit_id)
+            if saved_config is None:
+                empty_config = {"target_folder": "", "target_zip_folder": "", "receipt_folder": "", "conflict_action": "overwrite", "post_action": "leave"}
+                if current_config != empty_config: is_unsaved = True
+            else:
+                if current_config != saved_config: is_unsaved = True
                 
         if is_unsaved: 
             self.btn_save_config.config(style="Accent.TButton", text="Save Config *")
@@ -1312,9 +1381,16 @@ You can also run this application via the command line for automation. Run `pyth
             "post_action": self.post_action_var.get()
         }
         
+        active_pattern = self.active_pattern_var.get().strip()
+        
         try:
-            self.core.save_config(permit_id, config)
-            messagebox.showinfo("Success", f"Configuration saved for Config ID: {permit_id}")
+            if active_pattern:
+                self.core.save_pattern(active_pattern, config)
+                messagebox.showinfo("Success", f"Configuration saved for file pattern:\n'{active_pattern}'")
+            else:
+                self.core.save_config(permit_id, config)
+                messagebox.showinfo("Success", f"Configuration saved for Config ID:\n{permit_id}")
+                
             self.check_unsaved_changes()
         except Exception as e:
             messagebox.showerror("Error", f"Failed to save configuration:\n{e}")
