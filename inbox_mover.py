@@ -48,7 +48,7 @@ class InboxMoverCore:
                     return json.load(f)
             except Exception:
                 pass
-        return {"dark_mode": True, "font_size": 11, "window_geometry": "1100x950", "search_folder_1": "", "search_folder_2": ""}
+        return {"dark_mode": True, "font_size": 11, "window_geometry": "1120x950", "search_folder_1": "", "search_folder_2": ""}
 
     def save_app_settings(self, settings):
         settings_path = os.path.join(CONFIG_DIR, "app_settings.json")
@@ -474,14 +474,14 @@ class InboxMoverGUI:
     def __init__(self, root):
         self.root = root
         self.root.title(f"Inbox Mover v{VERSION} - the perfect FileButler companion")
-        self.root.minsize(900, 850)
+        self.root.minsize(920, 850)
         
         self.core = InboxMoverCore()
         settings = self.core.load_app_settings()
         self.is_dark_mode = settings.get("dark_mode", True)
         self.base_font_size = settings.get("font_size", 11)
         
-        window_geometry = settings.get("window_geometry", "1100x950")
+        window_geometry = settings.get("window_geometry", "1120x950")
         self.root.geometry(window_geometry)
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         
@@ -540,7 +540,7 @@ class InboxMoverGUI:
         title_frame.pack(side=tk.LEFT)
         self.lbl_title = ttk.Label(title_frame, text="Inbox Mover")
         self.lbl_title.pack(anchor=tk.W)
-        self.lbl_version = ttk.Label(title_frame, text=f"the perfect FileButler companion - version {VERSION}")
+        self.lbl_version = ttk.Label(title_frame, text=f"the perfect FileButler companion - v{VERSION}")
         self.lbl_version.pack(anchor=tk.W)
         
         tools_frame = ttk.Frame(header_frame)
@@ -762,14 +762,14 @@ class InboxMoverGUI:
             
         # Aggressive resize: Temporarily restrict min/max size to force the OS 
         # Window Manager to strictly respect the new dimensions, even if manually resized.
-        self.root.minsize(1100, 950)
-        self.root.maxsize(1100, 950)
+        self.root.minsize(1120, 950)
+        self.root.maxsize(1120, 950)
         
-        self.root.geometry("1100x950")
+        self.root.geometry("1120x950")
         self.root.update_idletasks() # Force UI to process the forced dimensions
         
         # Restore standard resizability boundaries
-        self.root.minsize(900, 850)
+        self.root.minsize(920, 850)
         screen_w = self.root.winfo_screenwidth()
         screen_h = self.root.winfo_screenheight()
         self.root.maxsize(screen_w, screen_h)
