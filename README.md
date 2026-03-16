@@ -6,6 +6,8 @@
 
 **Inbox Mover** is optimized to use the **receipt.json** in **myDRE FileButler.**
 
+![Inbox Mover Screenshot](https://github.com/flow4u/InboxMover/blob/main/InboxMover.png)
+
 ## **🔌 Developer Plugins (Alpha)**
 
 An alpha version of **inbox\_mover\_plugin.py** and **inbox\_mover\_plugin.R** is now available\!
