@@ -1,8 +1,8 @@
-# **Inbox Mover \- Comprehensive Test Plan (v0.9.9)**
+# **Inbox Mover \- Comprehensive Test Plan (v0.10)**
 
 ## **1\. Introduction**
 
-**Objective:** To verify that Inbox Mover v0.9.9 successfully processes transfer-\* folders, extracts ZIP archives, handles receipt.json updates, dynamically generates local logs, manages the modern UI, resolves file conflicts, handles pattern matching, and reliably supports keyboard navigation.
+**Objective:** To verify that Inbox Mover v0.10 successfully processes transfer-\* folders, extracts ZIP archives, handles receipt.json updates, dynamically generates local logs, manages the modern UI, resolves file conflicts, handles pattern matching, and reliably supports keyboard navigation.
 
 **Scope:** UI functionality, core extraction logic, folder scanning, configuration management, absolute path logic, dynamic overrides, local/global logging, receipt injection, pattern matching heuristics, and CLI execution.
 
@@ -35,7 +35,7 @@ Before beginning the tests, set up the following directory structure and dummy f
 
 | Test ID | Action | Expected Result | Status |
 | :---- | :---- | :---- | :---- |
-| UI-01 | Launch inbox\_mover.py | App opens with default size (1120x950), Dark Mode enabled. Version reads 0.9.9. Modern "Card" layout is visible. |  |
+| UI-01 | Launch inbox\_mover.py | App opens with default size (1120x950), Dark Mode enabled. Version reads 0.10. Modern "Card" layout is visible. |  |
 | UI-02 | Click "☀" (Light Mode) | UI switches to a light color palette. Icon changes to "☾". |  |
 | UI-03 | Click "A+" and "A-" buttons | Font size dynamically scales up and down. |  |
 | UI-04 | Click "Reset View" | Window snaps back to exactly 1120x950 pixels and base font size resets to 11\. |  |
@@ -53,7 +53,7 @@ Before beginning the tests, set up the following directory structure and dummy f
 | CRE-01 | Process a valid transfer but type non-existent Target paths manually. | The application successfully creates all missing directories automatically. |  |
 | CON-01 | transfer-05-conflict: Set Action to "Rename existing file". Click "PROCESS". | Target folder contains new conflict.txt AND the old file renamed with a timestamp. |  |
 
-## **5\. Local Logging & Receipt Injection (v0.9.9 Features)**
+## **5\. Local Logging & Receipt Injection**
 
 | Test ID | Action | Expected Result | Status |
 | :---- | :---- | :---- | :---- |
@@ -69,14 +69,17 @@ Before beginning the tests, set up the following directory structure and dummy f
 | CFG-02 | Modify Target Folder manually in UI. | "Save Config" button immediately turns Orange (Save Config \*). |  |
 | CFG-03 | Navigate to transfer-03-empty. | Config ID is "DEFAULT". "PROCESS" button is disabled because folder is empty. |  |
 | CFG-04 | Navigate to transfer-04-overrides. | UI automatically updates to match the receipt keys. Button is Orange indicating receipt overrides. |  |
+| CFG-05 | Click "⚙ Manage" next to Config ID. | Modal opens. You can select, edit, and save updates to PERMIT-A, or delete it. |  |
 
-## **7\. Auto-Match Pattern Heuristics (NEW)**
+## **7\. Auto-Match Pattern Heuristics**
 
 | Test ID | Action | Expected Result | Status |
 | :---- | :---- | :---- | :---- |
 | PAT-01 | Navigate to transfer-02-no-receipt (which contains backup\_db.sql). Enter backup\*.sql in the "Auto-Match Pattern" field. Change Target Folder to C:\\Test\\Backups. Click "Save Config". | Success prompt confirms saved for pattern 'backup\*.sql'. Pattern saved in patterns.json. |  |
 | PAT-02 | Refresh the application and navigate back to transfer-02-no-receipt. | The app detects backup\_db.sql matches the saved pattern. Target Folder automatically populates with C:\\Test\\Backups. Auto-Match Pattern field populates with backup\*.sql. |  |
 | PAT-03 | Navigate to transfer-01-standard (PERMIT-A). | Ensure Target Folder loads PERMIT-A config, ignoring any pattern logic because Config ID takes precedence. |  |
+| PAT-04 | While viewing a pattern (e.g., backup\*.sql), click the "🗑 Delete" button next to the input field. | Success message. Pattern clears, settings fall back to DEFAULT. Button becomes disabled. |  |
+| PAT-05 | Click "⚙ Manage" next to the Pattern field. | Pattern manager modal opens. Patterns can be created, edited, and deleted. |  |
 
 ## **8\. Global Audit Logging & CLI**
 
@@ -84,7 +87,7 @@ Before beginning the tests, set up the following directory structure and dummy f
 | :---- | :---- | :---- | :---- |
 | GLB-01 | Click "📄 View Log" in the top right. | A text editor modal opens process\_log.jsonl. |  |
 | GLB-02 | Click "🗑 Clear Log" then "📄 View Log". | A prompt says "Log file is empty". |  |
-| CLI-01 | Open terminal. Run: python inbox\_mover.py \--cli \--help | Displays help menu with all available arguments, confirming v0.9.9. |  |
+| CLI-01 | Open terminal. Run: python inbox\_mover.py \--cli \--help | Displays help menu with all available arguments, confirming v0.10. |  |
 | CLI-02 | Run CLI process command. | Scans folder and processes headlessly. |  |
 
 [image1]: <data:image/png;base64,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>

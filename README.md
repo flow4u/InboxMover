@@ -1,4 +1,4 @@
-# **Inbox Mover \- the perfect FileButler companion (v0.9.9)**
+# **Inbox Mover \- the perfect FileButler companion (v0.10)**
 
 **Inbox Mover** is a cross-platform utility designed to process files in the **transfer-** folders found in **i:** and **z:\\inbox** on [**myDRE**](https://mydre.org)**.** 
 
@@ -7,6 +7,13 @@
 **Inbox Mover** is optimized to use the **receipt.json** in **myDRE FileButler.**
 
 ![Inbox Mover Screenshot](https://github.com/flow4u/InboxMover/blob/main/InboxMover.png)
+
+
+## **📜 Open Source & Customization**
+
+**Inbox Mover** is open-source and completely free to use, modify, and distribute.
+
+Because it is written entirely in standard Python using built-in libraries, it is highly adaptable. If you want to tailor the tool to your specific workflow, add new features, or change the interface, Large Language Models (LLMs) are quite helpful\! You can simply paste the code into your favorite AI assistant and ask for the usable changes you need.
 
 ## **🔌 Developer Plugins (Alpha)**
 
@@ -105,7 +112,8 @@ The application reads the receipt.json file inside the ZIP to identify a **Confi
 
 * If no receipt.json is found, a "DEFAULT" Config ID is assigned. The app will use your saved DEFAULT settings as a fallback.  
 * Once you set up your folders and rules for a specific Config ID, click **'Save Config'**.  
-* The next time you encounter a transfer folder with that exact Config ID, the application will automatically load your saved folder paths and settings over the DEFAULT baseline.
+* The next time you encounter a transfer folder with that exact Config ID, the application will automatically load your saved folder paths and settings over the DEFAULT baseline.  
+* **Manage Configs:** Click the **⚙ Manage** button to edit or view all your saved configurations in one place.
 
 ### **6\. Auto-Match Pattern (Filename Routing)**
 
@@ -114,10 +122,12 @@ If a transfer folder doesn't have a receipt.json but contains specific files (li
 * **How to use:** Enter a wildcard pattern like backup\*.sql in the **Auto-Match Pattern** field.  
 * Configure your desired Target Folder and post-actions, then click **Save Config**.  
 * The next time a transfer folder contains any file matching that pattern (e.g., backup\_2026.sql), the application will automatically detect it and load those specific settings\!  
+* **Manage Patterns:** Click the **⚙ Manage** button next to the input field to view, edit, or delete all of your saved filename routing patterns.  
 * *Note: Pattern matching is subordinate to a valid Config ID but overrides the DEFAULT config baseline.*
 
 ### **7\. Advanced Logging & Overrides**
 
+* **Auto-Extract Checkbox:** By default, ZIP files are extracted. If you simply want to move/copy the .zip archive itself into your Target Folder, uncheck the "Auto-Extract ZIP files" box.  
 * **Global Audit Logging:** Every processed file and resolved conflict is written to a machine-readable JSONL file (process\_log.jsonl). Click **'📄 View Log'** to inspect it.  
 * **Local Process Logs:** When a folder is processed successfully (and not deleted), an Inbox Process.log file is dropped directly into the folder (or its new location in the Processed Folder).  
   * If this file exists, the GUI will dynamically display a "Latest:![][image1]  
@@ -143,6 +153,7 @@ python inbox\_mover.py \--cli \-s \<search\_folder\_1\> \<search\_folder\_2\> \-
 * \-z, \--target-zip-folder: Target folder for moving processed folders (Processed Folder).  
 * \-r, \--receipt-folder: Target folder specifically for the receipt.json file.  
 * \-c, \--conflict-action: Action when extracted file already exists. Choices: overwrite, keep\_both, rename\_existing (Default: overwrite).  
-* \-p, \--post-action: Action to perform after extraction. Choices: leave, delete, move (Default: leave).
+* \-p, \--post-action: Action to perform after extraction. Choices: leave, delete, move (Default: leave).  
+* \--no-auto-extract: Disable automatic zip extraction and instead copy the raw zip file.
 
 [image1]: <data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAmwAAAAuCAYAAACVmkVrAAADQklEQVR4Xu3cXYjmUxwH8NlaeYlsMqWZZ57/PGMyW0pqSEqK3KwLEXLDtUQuhaKsXFAopbjxkrj0kmxeyktYt0Q2W17aDTcuvJRt3KzvWefsnv5py8Vqpv186tf5nd85//9z5u7Xc55mbg4AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAD+o8lksjgMw6HEwel0eiDj4cRXifdqfn/bm/zn/tkTZXl5+bJxDQDgpJUmbM/8/PyZNT/SpHVrL6eJu/DY7hMvn3dFGrbrx3UAgJNWGqRnWp4GbSPxZTd/P8P2Nv8/pFm7L7FjXAcAYO5Ig1auQG/8l/qrdXyljq+l0Xs+42+TyeT0WjuYRuu8mh9eWVm5oOSpnZb5J9l3Ton2ztR3DvWKdajXrgsLC2ck/6vtqWs3JK6t+aFWz7tW6xmeKmfI+HRiTzlD6reWM9St21ZXV0/N/Ius3T6bzYZuDQBg60iDdXZprMb1Jk3Qg+3qtChNTxqge7v117u178qYRmk++Ub2PZR4NPnV3f5ryjsS+8paqZV9Q9ewJX+sb676fGlpaWG09k3L8+4X2hnq2lVtb8bL++cAALaMNDk3pZHZPa5X27P2bV8oTU+apktLnvH8zO8q+dra2lnJHy95+T3a8ZqjrO1KfNr2ZP9HyT/o1vcm/ujmGy3P3tv6d4/y39sZitJYllrJ89w9xzsTAMCmlaZmf7m+HNeLNDhPJPaVsdWy98Vu/aWWt9/EZf2NDNuy9tlc/R1c8gfavvau2Wx25VC/2SuNVJ6/OfFOuVLNfHfi87p2Z975bIk6/3F0hqPfsCX/voztWjbzXxNf1/yn0mC2vQAAm15peoZj/8Ljl6H7hqvbs7M0UWl0rivzen169Hpz+Kcpa3svLtejqe0q8zRkFyX/IfV3E7d0z7yVeDPxcHlfrT2XZw/kcy4p8/KbttKgpfZ2xjuy/mdq59bP2d+fIXvubnn5rHKGNq9/2yOJjxcXFyetDgDAJpFG7cNxDQCATWJ9ff2U6XT65LgOAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAsFX8DV7TuYPnroNBAAAAAElFTkSuQmCC>

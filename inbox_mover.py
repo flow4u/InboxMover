@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Inbox Mover v0.9.9
+Inbox Mover v0.10
 the perfect FileButler companion
 A utility to process and extract zip files containing a receipt.json,
 with both a Material-inspired GUI and a CLI mode.
@@ -24,7 +24,7 @@ import fnmatch
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox
 
-VERSION = "0.9.9"
+VERSION = "0.10"
 CONFIG_DIR = "permit_configs"
 
 # --------------------------------------------------------------------------- #
@@ -1174,15 +1174,18 @@ Inbox Mover is optimized for speed using keyboard shortcuts:
 * If no `receipt.json` is found, or it lacks an ID, a **DEFAULT** Config ID is assigned.
 * If you set up your folders and rules for a specific Config ID, click **Save Config**.
 * The next time you encounter a ZIP with that exact Config ID, the application will automatically load your saved folder paths and conflict/post-action settings.
+* **Manage Configs:** Use the **⚙ Manage** button to view, edit, or delete all your saved Config IDs in a dedicated window, or use the **🗑 Delete** button to quickly remove the current one.
 
 ## 6. Auto-Match Pattern (Filename Routing)
 If a transfer folder doesn't have a `receipt.json` but contains specific files (like database dumps or logs), you can route it based on a filename pattern.
 * **How to use:** Enter a wildcard pattern like `backup*.sql` in the **Auto-Match Pattern** field.
 * Configure your desired Target Folder and post-actions, then click **Save Config**.
 * The next time a transfer folder contains any file matching that pattern (e.g., `backup_2026.sql`), the application will automatically detect it and load those specific settings!
+* **Manage Patterns:** Use the **⚙ Manage** button to view, edit, or delete all your saved patterns, or use the **🗑 Delete** button to remove the active pattern.
 * *Note: Pattern matching is subordinate to a valid Config ID but overrides the DEFAULT config baseline.*
 
-## 7. Advanced Features (Overrides & Paths)
+## 7. Advanced Features
+* **Auto-Extract Checkbox:** By default, the app extracts the contents of ZIP files. Uncheck the "Auto-Extract ZIP files" option to simply copy the `.zip` file itself to the target folder instead.
 * **Absolute Paths:** If a file inside the ZIP is mapped to an absolute path (e.g., `C:\\logs\\file.txt`), it ignores the Target Folder and extracts directly to that path, creating folders as needed.
 * **Receipt Overrides:** If `receipt.json` contains keys like `target_folder`, `process_folder`, `receipt_folder`, `conflict_resolution`, or `post_processing`, these will automatically override your saved GUI settings. The **Save Config** button will turn orange to indicate unsaved changes forced by the receipt.
 * **Processing Log:** The application automatically logs every extracted file, moved file, conflict rename, and post-processing action into a machine-readable JSONL file. Click **📄 View Log** to open it in a readable window, or **📂 Log Folder** to browse the files directly.
