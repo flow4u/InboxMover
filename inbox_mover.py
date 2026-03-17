@@ -163,6 +163,19 @@ class InboxMoverCore:
                 return None
         return None
 
+    def get_all_configs(self):
+        """Return a dictionary of all saved configs (excluding system files)."""
+        configs = {}
+        if not os.path.exists(CONFIG_DIR):
+            return configs
+        for f in os.listdir(CONFIG_DIR):
+            if f.endswith('.json') and f not in ('app_settings.json', 'patterns.json'):
+                permit_id = f[:-5]
+                cfg = self.load_config(permit_id)
+                if cfg:
+                    configs[permit_id] = cfg
+        return configs
+
     def save_config(self, permit_id, config_data):
         """Save configuration for a specific Config ID."""
         if not permit_id:
@@ -170,6 +183,14 @@ class InboxMoverCore:
         config_path = os.path.join(CONFIG_DIR, f"{permit_id}.json")
         with open(config_path, 'w') as f:
             json.dump(config_data, f, indent=4)
+
+    def delete_config(self, permit_id):
+        """Delete a configuration for a specific Config ID."""
+        if not permit_id:
+            return
+        config_path = os.path.join(CONFIG_DIR, f"{permit_id}.json")
+        if os.path.exists(config_path):
+            os.remove(config_path)
 
     def load_patterns(self):
         """Load the pattern matching configurations."""
@@ -189,6 +210,15 @@ class InboxMoverCore:
         patterns_path = os.path.join(CONFIG_DIR, "patterns.json")
         with open(patterns_path, 'w') as f:
             json.dump(patterns, f, indent=4)
+
+    def delete_pattern(self, pattern):
+        """Delete a configuration for a specific file pattern."""
+        patterns = self.load_patterns()
+        if pattern in patterns:
+            del patterns[pattern]
+            patterns_path = os.path.join(CONFIG_DIR, "patterns.json")
+            with open(patterns_path, 'w') as f:
+                json.dump(patterns, f, indent=4)
 
     def write_log(self, status, folder_data, config, actions, message=""):
         """Write a structured JSON log entry."""
@@ -621,10 +651,21 @@ class InboxMoverGUI:
         card_info.pack(fill=tk.X, pady=(5, 15))
         self.lbl_zip_name = ttk.Label(card_info, textvariable=self.zip_name_var, style="CardTitle.TLabel")
         self.lbl_zip_name.pack(anchor=tk.W)
-        self.lbl_permit_id = ttk.Label(card_info, textvariable=self.permit_id_var, style="Card.TLabel")
-        self.lbl_permit_id.pack(anchor=tk.W, pady=(5, 0))
+        
+        # Config ID & Manage
+        permit_frame = ttk.Frame(card_info, style="Card.TFrame")
+        permit_frame.pack(anchor=tk.W, pady=(5, 0), fill=tk.X)
+        self.lbl_permit_id = ttk.Label(permit_frame, textvariable=self.permit_id_var, style="Card.TLabel")
+        self.lbl_permit_id.pack(side=tk.LEFT)
+        
+        self.btn_delete_config = ttk.Button(permit_frame, text="🗑 Delete", command=self.delete_current_config, takefocus=0, state=tk.DISABLED)
+        self.btn_delete_config.pack(side=tk.LEFT, padx=(10, 0))
+        
+        self.btn_manage_configs = ttk.Button(permit_frame, text="⚙ Manage", command=self.open_manage_configs, takefocus=0)
+        self.btn_manage_configs.pack(side=tk.LEFT, padx=(5, 0))
+        
         self.lbl_inbox_name = ttk.Label(card_info, textvariable=self.inbox_name_var, style="CardDim.TLabel")
-        self.lbl_inbox_name.pack(anchor=tk.W)
+        self.lbl_inbox_name.pack(anchor=tk.W, pady=(5, 0))
         self.lbl_last_processed = ttk.Label(card_info, textvariable=self.last_processed_var, style="CardAccent.TLabel")
         self.lbl_last_processed.pack(anchor=tk.W, pady=(5, 0))
 
@@ -635,6 +676,12 @@ class InboxMoverGUI:
         self.entry_pattern = ttk.Entry(pattern_frame, textvariable=self.active_pattern_var, width=30, takefocus=0)
         self.entry_pattern.pack(side=tk.LEFT)
         ttk.Label(pattern_frame, text="(e.g., backup*.*)", style="CardDim.TLabel").pack(side=tk.LEFT, padx=(5, 0))
+        
+        self.btn_delete_pattern = ttk.Button(pattern_frame, text="🗑 Delete", command=self.delete_current_pattern, takefocus=0, state=tk.DISABLED)
+        self.btn_delete_pattern.pack(side=tk.LEFT, padx=(10, 0))
+
+        self.btn_manage_patterns = ttk.Button(pattern_frame, text="⚙ Manage", command=self.open_manage_patterns, takefocus=0)
+        self.btn_manage_patterns.pack(side=tk.LEFT, padx=(5, 0))
 
         # Card Options
         card_options = ttk.Frame(self.card_frame, style="Card.TFrame")
@@ -872,8 +919,18 @@ class InboxMoverGUI:
         style.configure("Card.TCheckbutton", background=card_bg, foreground=fg_color)
         style.map("Card.TCheckbutton", background=[('active', card_bg)])
 
-        # Entries and Texts
+        # Entries, Comboboxes, and Texts
         style.configure("TEntry", fieldbackground=entry_bg, foreground=fg_color, bordercolor=entry_border, lightcolor=entry_border, darkcolor=entry_border)
+        
+        style.configure("TCombobox", fieldbackground=entry_bg, background=btn_bg, foreground=fg_color, arrowcolor=fg_color, bordercolor=entry_border)
+        style.map("TCombobox", fieldbackground=[('readonly', entry_bg)], foreground=[('readonly', fg_color)], selectbackground=[('readonly', fg_accent)], selectforeground=[('readonly', '#ffffff')])
+        
+        # Style the actual dropdown list attached to the Combobox
+        self.root.option_add('*TCombobox*Listbox.background', entry_bg)
+        self.root.option_add('*TCombobox*Listbox.foreground', fg_color)
+        self.root.option_add('*TCombobox*Listbox.selectBackground', fg_accent)
+        self.root.option_add('*TCombobox*Listbox.selectForeground', '#ffffff')
+        
         self.receipt_text.configure(bg=text_bg, fg=fg_color, insertbackground=fg_color, highlightbackground=entry_border, highlightcolor=entry_border)
 
     def toggle_theme(self):
@@ -1361,10 +1418,24 @@ You can also run this application via the command line for automation. Run `pyth
 
         is_unsaved = False
         active_pattern = self.active_pattern_var.get().strip()
+        patterns = self.core.load_patterns()
+        
+        # Manage Delete button state for patterns
+        if hasattr(self, 'btn_delete_pattern'):
+            if active_pattern and active_pattern in patterns:
+                self.btn_delete_pattern.config(state=tk.NORMAL)
+            else:
+                self.btn_delete_pattern.config(state=tk.DISABLED)
+                
+        # Manage Delete button state for configs
+        if hasattr(self, 'btn_delete_config'):
+            if permit_id and self.core.load_config(permit_id):
+                self.btn_delete_config.config(state=tk.NORMAL)
+            else:
+                self.btn_delete_config.config(state=tk.DISABLED)
         
         # Determine comparison baseline based on what we are saving to
         if active_pattern:
-            patterns = self.core.load_patterns()
             saved_config = patterns.get(active_pattern)
             if saved_config != current_config:
                 is_unsaved = True
@@ -1392,6 +1463,339 @@ You can also run this application via the command line for automation. Run `pyth
         if self.current_index < len(self.folders_data) - 1:
             self.current_index += 1
             self.update_display()
+
+    def delete_current_config(self):
+        if self.current_index < 0: return
+        permit_id = self.folders_data[self.current_index].get('permitId')
+        if not permit_id: return
+        
+        if messagebox.askyesno("Confirm Delete", f"Are you sure you want to permanently delete the config for:\n\n'{permit_id}'?"):
+            try:
+                self.core.delete_config(permit_id)
+                messagebox.showinfo("Success", f"Config for '{permit_id}' has been deleted.")
+                self.update_display() # Reload the display to update unsaved status
+            except Exception as e:
+                messagebox.showerror("Error", f"Failed to delete config:\n{e}")
+
+    def open_manage_configs(self):
+        manage_win = tk.Toplevel(self.root)
+        manage_win.title("Manage Saved Configs")
+        manage_win.geometry("950x600")
+        manage_win.transient(self.root)
+        manage_win.grab_set()
+        manage_win.configure(bg=self.root.cget("bg"))
+
+        main_paned = ttk.PanedWindow(manage_win, orient=tk.HORIZONTAL)
+        main_paned.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
+
+        # --- Left side: Listbox ---
+        left_frame = ttk.Frame(main_paned, style="Card.TFrame", padding=10)
+        main_paned.add(left_frame, weight=1)
+
+        ttk.Label(left_frame, text="Saved Config IDs", style="Header.TLabel").pack(anchor=tk.W, pady=(0, 10))
+        
+        listbox_frame = ttk.Frame(left_frame)
+        listbox_frame.pack(fill=tk.BOTH, expand=True)
+        
+        font_family = "Segoe UI" if sys.platform == "win32" else "Helvetica"
+        self.config_listbox = tk.Listbox(listbox_frame, font=(font_family, self.base_font_size), selectbackground="#2563eb", activestyle="none", highlightthickness=0)
+        
+        if self.is_dark_mode:
+            self.config_listbox.configure(bg="#1e1e1e", fg="#cccccc", selectforeground="#ffffff")
+        else:
+            self.config_listbox.configure(bg="#f9fafb", fg="#111827", selectforeground="#ffffff")
+            
+        scrollbar = ttk.Scrollbar(listbox_frame, orient=tk.VERTICAL, command=self.config_listbox.yview)
+        self.config_listbox.configure(yscrollcommand=scrollbar.set)
+        self.config_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # --- Right side: Form ---
+        right_frame = ttk.Frame(main_paned, style="Card.TFrame", padding=20)
+        main_paned.add(right_frame, weight=3)
+
+        ttk.Label(right_frame, text="Config Configuration", style="Header.TLabel").pack(anchor=tk.W, pady=(0, 15))
+
+        m_permit_var = tk.StringVar()
+        m_target_var = tk.StringVar()
+        m_zip_var = tk.StringVar()
+        m_receipt_var = tk.StringVar()
+        m_conflict_var = tk.StringVar(value="overwrite")
+        m_post_var = tk.StringVar(value="leave")
+        m_auto_var = tk.BooleanVar(value=True)
+
+        def make_row(parent, label, var, is_dir=True):
+            row = ttk.Frame(parent, style="Card.TFrame")
+            row.pack(fill=tk.X, pady=5)
+            ttk.Label(row, text=label, width=20, style="Card.TLabel").pack(side=tk.LEFT)
+            entry = ttk.Entry(row, textvariable=var)
+            entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+            if is_dir:
+                def browse():
+                    d = filedialog.askdirectory(parent=manage_win)
+                    if d: var.set(d)
+                ttk.Button(row, text="Browse", command=browse, width=8).pack(side=tk.LEFT)
+            return row
+
+        make_row(right_frame, "Config ID:", m_permit_var, is_dir=False)
+        ttk.Separator(right_frame, orient='horizontal').pack(fill=tk.X, pady=10)
+        
+        make_row(right_frame, "Target Folder:", m_target_var)
+        make_row(right_frame, "Processed Folder:", m_zip_var)
+        make_row(right_frame, "Receipt Folder:", m_receipt_var)
+
+        ttk.Separator(right_frame, orient='horizontal').pack(fill=tk.X, pady=10)
+
+        combo_frame = ttk.Frame(right_frame, style="Card.TFrame")
+        combo_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Label(combo_frame, text="Conflict Action:", width=20, style="Card.TLabel").pack(side=tk.LEFT)
+        c_cb = ttk.Combobox(combo_frame, textvariable=m_conflict_var, values=["overwrite", "keep_both", "rename_existing"], state="readonly")
+        c_cb.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+        
+        ttk.Label(combo_frame, text="Post Action:", width=15, style="Card.TLabel").pack(side=tk.LEFT)
+        p_cb = ttk.Combobox(combo_frame, textvariable=m_post_var, values=["leave", "delete", "move"], state="readonly")
+        p_cb.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        chk_frame = ttk.Frame(right_frame, style="Card.TFrame")
+        chk_frame.pack(fill=tk.X, pady=(15, 5))
+        ttk.Checkbutton(chk_frame, text="Auto-Extract ZIP files", variable=m_auto_var, style="Card.TCheckbutton").pack(side=tk.LEFT)
+
+        action_frame = ttk.Frame(right_frame, style="Card.TFrame")
+        action_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(20, 0))
+
+        configs_data = self.core.get_all_configs()
+        
+        def refresh_list():
+            self.config_listbox.delete(0, tk.END)
+            for p in sorted(configs_data.keys()):
+                self.config_listbox.insert(tk.END, p)
+
+        def on_select(event):
+            sel = self.config_listbox.curselection()
+            if not sel: return
+            p_name = self.config_listbox.get(sel[0])
+            cfg = configs_data.get(p_name, {})
+            
+            m_permit_var.set(p_name)
+            m_target_var.set(cfg.get('target_folder', ''))
+            m_zip_var.set(cfg.get('target_zip_folder', ''))
+            m_receipt_var.set(cfg.get('receipt_folder', ''))
+            m_conflict_var.set(cfg.get('conflict_action', 'overwrite'))
+            m_post_var.set(cfg.get('post_action', 'leave'))
+            m_auto_var.set(cfg.get('auto_extract', True))
+
+        self.config_listbox.bind('<<ListboxSelect>>', on_select)
+
+        def save_config_item():
+            p_name = m_permit_var.get().strip()
+            if not p_name:
+                messagebox.showwarning("Warning", "Config ID cannot be empty.", parent=manage_win)
+                return
+            
+            new_cfg = {
+                "target_folder": m_target_var.get(),
+                "target_zip_folder": m_zip_var.get(),
+                "receipt_folder": m_receipt_var.get(),
+                "conflict_action": m_conflict_var.get(),
+                "post_action": m_post_var.get(),
+                "auto_extract": m_auto_var.get()
+            }
+            configs_data[p_name] = new_cfg
+            self.core.save_config(p_name, new_cfg)
+            refresh_list()
+            messagebox.showinfo("Success", f"Saved configuration for Config ID '{p_name}'.", parent=manage_win)
+
+        def delete_config_item():
+            p_name = m_permit_var.get().strip()
+            if not p_name or p_name not in configs_data:
+                return
+            if messagebox.askyesno("Confirm Delete", f"Are you sure you want to delete the config '{p_name}'?", parent=manage_win):
+                del configs_data[p_name]
+                self.core.delete_config(p_name)
+                m_permit_var.set("")
+                m_target_var.set("")
+                m_zip_var.set("")
+                m_receipt_var.set("")
+                refresh_list()
+                
+        def on_close():
+            manage_win.destroy()
+            self.update_display() # Refresh main UI
+
+        ttk.Button(action_frame, text="Close", command=on_close).pack(side=tk.RIGHT, padx=(10, 0))
+        ttk.Button(action_frame, text="Save Config", style="Accent.TButton", command=save_config_item).pack(side=tk.RIGHT)
+        ttk.Button(action_frame, text="Delete", command=delete_config_item).pack(side=tk.LEFT)
+
+        refresh_list()
+
+    def delete_current_pattern(self):
+        pattern = self.active_pattern_var.get().strip()
+        if not pattern:
+            return
+            
+        patterns = self.core.load_patterns()
+        if pattern in patterns:
+            if messagebox.askyesno("Confirm Delete", f"Are you sure you want to permanently delete the pattern:\n\n'{pattern}'?"):
+                try:
+                    self.core.delete_pattern(pattern)
+                    messagebox.showinfo("Success", f"Pattern '{pattern}' has been deleted.")
+                    self.active_pattern_var.set("")
+                    self.update_display() # Reload the display to fall back to DEFAULT or PermitID config
+                except Exception as e:
+                    messagebox.showerror("Error", f"Failed to delete pattern:\n{e}")
+
+    def open_manage_patterns(self):
+        manage_win = tk.Toplevel(self.root)
+        manage_win.title("Manage Auto-Match Patterns")
+        manage_win.geometry("950x600")
+        manage_win.transient(self.root)
+        manage_win.grab_set()
+        manage_win.configure(bg=self.root.cget("bg"))
+
+        main_paned = ttk.PanedWindow(manage_win, orient=tk.HORIZONTAL)
+        main_paned.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
+
+        # --- Left side: Listbox ---
+        left_frame = ttk.Frame(main_paned, style="Card.TFrame", padding=10)
+        main_paned.add(left_frame, weight=1)
+
+        ttk.Label(left_frame, text="Saved Patterns", style="Header.TLabel").pack(anchor=tk.W, pady=(0, 10))
+        
+        listbox_frame = ttk.Frame(left_frame)
+        listbox_frame.pack(fill=tk.BOTH, expand=True)
+        
+        font_family = "Segoe UI" if sys.platform == "win32" else "Helvetica"
+        self.pattern_listbox = tk.Listbox(listbox_frame, font=(font_family, self.base_font_size), selectbackground="#2563eb", activestyle="none", highlightthickness=0)
+        
+        if self.is_dark_mode:
+            self.pattern_listbox.configure(bg="#1e1e1e", fg="#cccccc", selectforeground="#ffffff")
+        else:
+            self.pattern_listbox.configure(bg="#f9fafb", fg="#111827", selectforeground="#ffffff")
+            
+        scrollbar = ttk.Scrollbar(listbox_frame, orient=tk.VERTICAL, command=self.pattern_listbox.yview)
+        self.pattern_listbox.configure(yscrollcommand=scrollbar.set)
+        self.pattern_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
+        scrollbar.pack(side=tk.RIGHT, fill=tk.Y)
+
+        # --- Right side: Form ---
+        right_frame = ttk.Frame(main_paned, style="Card.TFrame", padding=20)
+        main_paned.add(right_frame, weight=3)
+
+        ttk.Label(right_frame, text="Pattern Configuration", style="Header.TLabel").pack(anchor=tk.W, pady=(0, 15))
+
+        m_pattern_var = tk.StringVar()
+        m_target_var = tk.StringVar()
+        m_zip_var = tk.StringVar()
+        m_receipt_var = tk.StringVar()
+        m_conflict_var = tk.StringVar(value="overwrite")
+        m_post_var = tk.StringVar(value="leave")
+        m_auto_var = tk.BooleanVar(value=True)
+
+        def make_row(parent, label, var, is_dir=True):
+            row = ttk.Frame(parent, style="Card.TFrame")
+            row.pack(fill=tk.X, pady=5)
+            ttk.Label(row, text=label, width=20, style="Card.TLabel").pack(side=tk.LEFT)
+            entry = ttk.Entry(row, textvariable=var)
+            entry.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
+            if is_dir:
+                def browse():
+                    d = filedialog.askdirectory(parent=manage_win)
+                    if d: var.set(d)
+                ttk.Button(row, text="Browse", command=browse, width=8).pack(side=tk.LEFT)
+            return row
+
+        make_row(right_frame, "Pattern (e.g. backup*):", m_pattern_var, is_dir=False)
+        ttk.Separator(right_frame, orient='horizontal').pack(fill=tk.X, pady=10)
+        
+        make_row(right_frame, "Target Folder:", m_target_var)
+        make_row(right_frame, "Processed Folder:", m_zip_var)
+        make_row(right_frame, "Receipt Folder:", m_receipt_var)
+
+        ttk.Separator(right_frame, orient='horizontal').pack(fill=tk.X, pady=10)
+
+        combo_frame = ttk.Frame(right_frame, style="Card.TFrame")
+        combo_frame.pack(fill=tk.X, pady=5)
+        
+        ttk.Label(combo_frame, text="Conflict Action:", width=20, style="Card.TLabel").pack(side=tk.LEFT)
+        c_cb = ttk.Combobox(combo_frame, textvariable=m_conflict_var, values=["overwrite", "keep_both", "rename_existing"], state="readonly")
+        c_cb.pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 10))
+        
+        ttk.Label(combo_frame, text="Post Action:", width=15, style="Card.TLabel").pack(side=tk.LEFT)
+        p_cb = ttk.Combobox(combo_frame, textvariable=m_post_var, values=["leave", "delete", "move"], state="readonly")
+        p_cb.pack(side=tk.LEFT, fill=tk.X, expand=True)
+
+        chk_frame = ttk.Frame(right_frame, style="Card.TFrame")
+        chk_frame.pack(fill=tk.X, pady=(15, 5))
+        ttk.Checkbutton(chk_frame, text="Auto-Extract ZIP files", variable=m_auto_var, style="Card.TCheckbutton").pack(side=tk.LEFT)
+
+        action_frame = ttk.Frame(right_frame, style="Card.TFrame")
+        action_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(20, 0))
+
+        patterns_data = self.core.load_patterns()
+        
+        def refresh_list():
+            self.pattern_listbox.delete(0, tk.END)
+            for p in sorted(patterns_data.keys()):
+                self.pattern_listbox.insert(tk.END, p)
+
+        def on_select(event):
+            sel = self.pattern_listbox.curselection()
+            if not sel: return
+            p_name = self.pattern_listbox.get(sel[0])
+            cfg = patterns_data.get(p_name, {})
+            
+            m_pattern_var.set(p_name)
+            m_target_var.set(cfg.get('target_folder', ''))
+            m_zip_var.set(cfg.get('target_zip_folder', ''))
+            m_receipt_var.set(cfg.get('receipt_folder', ''))
+            m_conflict_var.set(cfg.get('conflict_action', 'overwrite'))
+            m_post_var.set(cfg.get('post_action', 'leave'))
+            m_auto_var.set(cfg.get('auto_extract', True))
+
+        self.pattern_listbox.bind('<<ListboxSelect>>', on_select)
+
+        def save_pattern():
+            p_name = m_pattern_var.get().strip()
+            if not p_name:
+                messagebox.showwarning("Warning", "Pattern cannot be empty.", parent=manage_win)
+                return
+            
+            new_cfg = {
+                "target_folder": m_target_var.get(),
+                "target_zip_folder": m_zip_var.get(),
+                "receipt_folder": m_receipt_var.get(),
+                "conflict_action": m_conflict_var.get(),
+                "post_action": m_post_var.get(),
+                "auto_extract": m_auto_var.get()
+            }
+            patterns_data[p_name] = new_cfg
+            self.core.save_pattern(p_name, new_cfg)
+            refresh_list()
+            messagebox.showinfo("Success", f"Saved configuration for pattern '{p_name}'.", parent=manage_win)
+
+        def delete_pattern():
+            p_name = m_pattern_var.get().strip()
+            if not p_name or p_name not in patterns_data:
+                return
+            if messagebox.askyesno("Confirm Delete", f"Are you sure you want to delete the pattern '{p_name}'?", parent=manage_win):
+                del patterns_data[p_name]
+                self.core.delete_pattern(p_name)
+                m_pattern_var.set("")
+                m_target_var.set("")
+                m_zip_var.set("")
+                m_receipt_var.set("")
+                refresh_list()
+                
+        def on_close():
+            manage_win.destroy()
+            self.update_display() # Refresh main UI to apply any pattern changes immediately
+
+        ttk.Button(action_frame, text="Close", command=on_close).pack(side=tk.RIGHT, padx=(10, 0))
+        ttk.Button(action_frame, text="Save Config", style="Accent.TButton", command=save_pattern).pack(side=tk.RIGHT)
+        ttk.Button(action_frame, text="Delete", command=delete_pattern).pack(side=tk.LEFT)
+
+        refresh_list()
 
     def save_permit_config(self):
         if self.current_index < 0: return
