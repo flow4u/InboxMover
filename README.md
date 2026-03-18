@@ -4,7 +4,7 @@
 
 **Inbox Mover** processes the files into a designated target folder while automatically resolving file conflicts based on your preferences. Zip-files will be automatically extracted. It features both a modern, user-friendly graphical interface (GUI) and a Command-Line Interface (CLI) for automation.
 
-**Inbox Mover** is optimized to use the **receipt.json** in **myDRE FileButler.**
+See also **[Inbox Mover FAQ](https://github.com/flow4u/InboxMover/blob/main/Inbox%20Mover%20FAQ.md** for a quick read how it can help you.
 
 ![Inbox Mover Screenshot](https://github.com/flow4u/InboxMover/blob/main/InboxMover.png)
 
