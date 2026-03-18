@@ -21,7 +21,7 @@ import fnmatch
 
 # Tkinter imports
 import tkinter as tk
-from tkinter import ttk, filedialog, messagebox
+from tkinter import ttk, filedialog, messagebox, simpledialog
 
 VERSION = "0.10"
 CONFIG_DIR = "permit_configs"
@@ -133,15 +133,18 @@ class InboxMoverCore:
             with zipfile.ZipFile(zip_path, 'r') as zf:
                 receipt_filename = next((f for f in zf.namelist() if f.endswith('receipt.json')), None)
                 if receipt_filename:
-                    with zf.open(receipt_filename) as f:
-                        content = f.read().decode('utf-8')
-                        data["receipt_raw"] = content
-                        try:
-                            receipt_json = json.loads(content)
-                            data["receipt"] = receipt_json
-                            data["permitId"] = receipt_json.get("permitId", "DEFAULT")
-                        except json.JSONDecodeError:
-                            pass
+                    try:
+                        with zf.open(receipt_filename) as f:
+                            content = f.read().decode('utf-8')
+                            data["receipt_raw"] = content
+                            try:
+                                receipt_json = json.loads(content)
+                                data["receipt"] = receipt_json
+                                data["permitId"] = receipt_json.get("permitId", "DEFAULT")
+                            except json.JSONDecodeError:
+                                pass
+                    except RuntimeError:
+                        data["receipt_raw"] = "<receipt.json is password protected>"
                 return data
         except zipfile.BadZipFile:
             return None
@@ -309,7 +312,7 @@ class InboxMoverCore:
                 except Exception as e:
                     print(f"Failed to update receipt.json with processing log: {e}")
 
-    def process_zip(self, folder_data, config, progress_callback=None):
+    def process_zip(self, folder_data, config, progress_callback=None, password_callback=None):
         target_folder = config.get('target_folder')
         conflict_action = config.get('conflict_action', 'overwrite')
         post_action = config.get('post_action', 'leave')
@@ -396,6 +399,7 @@ class InboxMoverCore:
 
         def extract_zip_file(zip_path):
             zip_filename = os.path.basename(zip_path)
+            pwd = None
             with zipfile.ZipFile(zip_path, 'r') as zf:
                 file_list = [f for f in zf.infolist() if not f.is_dir()]
                 total = len(file_list)
@@ -431,9 +435,25 @@ class InboxMoverCore:
                     os.makedirs(os.path.dirname(ext_path), exist_ok=True)
                     final_path = get_final_path(ext_path)
 
-                    with zf.open(zinfo) as source, open(final_path, "wb") as target:
-                        shutil.copyfileobj(source, target)
-                        
+                    while True:
+                        try:
+                            with zf.open(zinfo, pwd=pwd) as source, open(final_path, "wb") as target:
+                                shutil.copyfileobj(source, target)
+                            break # Success
+                        except RuntimeError as e:
+                            err_str = str(e).lower()
+                            # RuntimeError handles bad or missing passwords in standard ZipCrypto
+                            if 'password' in err_str or 'encrypted' in err_str:
+                                if password_callback:
+                                    pwd_str = password_callback(zip_filename)
+                                    if pwd_str is None:
+                                        raise ValueError(f"Password entry cancelled by user. Extraction of {zip_filename} aborted.")
+                                    pwd = pwd_str.encode('utf-8')
+                                else:
+                                    raise ValueError(f"Password required for {zip_filename} but no password provided.")
+                            else:
+                                raise e
+
                     actions_log.append({
                         "type": "extract",
                         "source": f"{zip_filename} -> {original_name}",
@@ -1853,9 +1873,30 @@ You can also run this application via the command line for automation. Run `pyth
         self.btn_process.config(state=tk.DISABLED, text="Processing...")
         self.refresh_btn_text(self.btn_process)
         
+        # Bridge the password prompt from the background thread safely into the Tkinter main loop
+        def get_pwd_prompt(zip_filename):
+            result = []
+            event = threading.Event()
+            
+            def prompt_ui():
+                pwd = simpledialog.askstring(
+                    "Password Required", 
+                    f"The file '{zip_filename}' is encrypted.\n\nPlease enter the password:", 
+                    show='*', 
+                    parent=self.root
+                )
+                result.append(pwd)
+                event.set()
+                
+            # Schedule UI prompt into main thread
+            self.root.after(0, prompt_ui)
+            # Block the worker thread until UI finishes
+            event.wait()
+            return result[0]
+        
         def worker():
             try:
-                self.core.process_zip(current_data, config)
+                self.core.process_zip(current_data, config, password_callback=get_pwd_prompt)
                 self.root.after(0, self.on_process_success)
             except Exception as e:
                 self.root.after(0, lambda err=e: self.on_process_error(err))
@@ -1954,6 +1995,9 @@ def run_cli():
 
     print(f"Found {len(folders)} transfer folders to inspect.")
     
+    def get_pwd_cli(zip_filename):
+        return getpass.getpass(f"\nPassword required for '{zip_filename}': ")
+    
     for data in folders:
         print(f"\nProcessing Folder: {data['folder_name']} (Config ID: {data['permitId']})")
         
@@ -2000,7 +2044,7 @@ def run_cli():
             continue
             
         try:
-            core.process_zip(data, config)
+            core.process_zip(data, config, password_callback=get_pwd_cli)
             print("  Successfully processed. Actions written to log.")
         except Exception as e:
             print(f"  Error processing zip: {e}")
