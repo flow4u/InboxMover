@@ -62,3 +62,5 @@ You can even click the **📄 Process Log** button to see exactly which files th
 5. Click **PROCESS FOLDER**.
 
 From now on, whenever that same type of file arrives, steps 3 and 4 are done for you automatically. Just click **PROCESS**\!
+
+Try it yourself using the instructions in [**README.md**](https://github.com/flow4u/InboxMover/blob/main/README.md)
