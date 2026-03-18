@@ -27,7 +27,7 @@ To run Inbox Mover, you need **Python 3** installed on your system. The applicat
 
 ### **Installing Python and Tkinter**
 
-### **On Windows (1)** -- no python needed, but you must be able to download an **exe**
+#### **On Windows (1)** -- no python needed, but you must be able to download an **exe**
 1. Download **inbox_mover.exe** from the github
 2. If needed upload to your Workspace
 3. Create folder **c:\Helper**
