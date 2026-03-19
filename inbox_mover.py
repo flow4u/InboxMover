@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Inbox Mover v0.10
+Inbox Mover v0.10.1
 A utility to process and extract zip files containing a receipt.json,
 with both a Material-inspired GUI and a CLI mode.
 Runs entirely on standard Python libraries.
@@ -23,7 +23,7 @@ import fnmatch
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
 
-VERSION = "0.10"
+VERSION = "0.10.1"
 CONFIG_DIR = "permit_configs"
 
 # --------------------------------------------------------------------------- #
@@ -78,7 +78,7 @@ class InboxMoverCore:
         return folders_data
 
     def inspect_transfer_folder(self, folder_path):
-        """Inspect a transfer folder for a valid zip containing receipt.json."""
+        """Inspect a transfer folder for a valid zip or a loose receipt.json."""
         folder_name = os.path.basename(folder_path)
         data = {
             "folder_path": folder_path,
@@ -94,31 +94,72 @@ class InboxMoverCore:
         
         valid_zip_found = False
         file_list = []
+        loose_receipt_data = None
+        loose_receipt_raw = ""
+        has_loose_receipt = False
+        
+        # 1. Gather all files and prioritize finding a loose receipt.json
         for root, _, files in os.walk(folder_path):
             for file in files:
                 rel_file = os.path.relpath(os.path.join(root, file), folder_path)
                 file_list.append(rel_file)
-                if file.lower().endswith('.zip') and not valid_zip_found:
-                    zip_path = os.path.join(root, file)
-                    zip_info = self.inspect_zip(zip_path)
-                    if zip_info and zip_info.get("receipt_raw"):
-                        data["zip_path"] = zip_path
-                        data["permitId"] = zip_info["permitId"]
-                        data["receipt"] = zip_info["receipt"]
-                        data["receipt_raw"] = zip_info["receipt_raw"]
-                        data["has_valid_zip"] = True
-                        data["can_process"] = True
-                        valid_zip_found = True
+                
+                if file.lower() == 'receipt.json':
+                    has_loose_receipt = True
+                    receipt_path = os.path.join(root, file)
+                    try:
+                        with open(receipt_path, 'r', encoding='utf-8') as f:
+                            loose_receipt_raw = f.read()
+                            
+                        if loose_receipt_raw.strip():
+                            try:
+                                loose_receipt_data = json.loads(loose_receipt_raw)
+                            except json.JSONDecodeError as e:
+                                warning_msg = f"[WARNING: receipt.json is not a valid JSON file.]\n[Error details: {e}]\n[Suggestion: Please check for formatting errors such as trailing commas, or use a free online JSON checker/validator to fix it.]\n\n"
+                                loose_receipt_raw = warning_msg + loose_receipt_raw
+                    except Exception as e:
+                        print(f"Error reading loose receipt.json: {e}")
+                        loose_receipt_raw = f"[Error reading file: {e}]"
         
         data["file_list"] = file_list
         
+        # 2. Check for ZIP files and apply logic
+        for root, _, files in os.walk(folder_path):
+            for file in files:
+                if file.lower().endswith('.zip') and not valid_zip_found:
+                    zip_path = os.path.join(root, file)
+                    data["zip_path"] = zip_path
+                    data["has_valid_zip"] = True
+                    valid_zip_found = True
+                    
+                    # A loose receipt always overrides a receipt trapped inside the ZIP
+                    if has_loose_receipt:
+                        data["receipt"] = loose_receipt_data
+                        data["receipt_raw"] = loose_receipt_raw if loose_receipt_raw.strip() else "<receipt.json is completely empty>"
+                        data["permitId"] = loose_receipt_data.get("permitId", "DEFAULT") if loose_receipt_data else "DEFAULT"
+                    else:
+                        zip_info = self.inspect_zip(zip_path)
+                        if zip_info and zip_info.get("receipt_raw"):
+                            data["permitId"] = zip_info["permitId"]
+                            data["receipt"] = zip_info["receipt"]
+                            data["receipt_raw"] = zip_info["receipt_raw"]
+                    break
+        
+        # 3. Determine processability if NO zip was found
         if not valid_zip_found:
-            if not file_list:
-                data["receipt_raw"] = "<Folder is empty>"
+            if has_loose_receipt:
+                data["receipt"] = loose_receipt_data
+                data["receipt_raw"] = loose_receipt_raw if loose_receipt_raw.strip() else "<receipt.json is completely empty>"
+                data["permitId"] = loose_receipt_data.get("permitId", "DEFAULT") if loose_receipt_data else "DEFAULT"
+                data["can_process"] = True
+            elif not file_list:
+                data["receipt_raw"] = ""
                 data["can_process"] = False
             else:
-                data["receipt_raw"] = "NO RECEIPT.JSON FOUND.\nWILL PROCESS ALL FILES IN FOLDER:\n\n" + "\n".join(sorted(file_list))
+                data["receipt_raw"] = ""
                 data["can_process"] = True
+        else:
+            data["can_process"] = True
                 
         return data
 
@@ -131,7 +172,8 @@ class InboxMoverCore:
         }
         try:
             with zipfile.ZipFile(zip_path, 'r') as zf:
-                receipt_filename = next((f for f in zf.namelist() if f.endswith('receipt.json')), None)
+                # Make the search case-insensitive by adding .lower()
+                receipt_filename = next((f for f in zf.namelist() if f.lower().endswith('receipt.json')), None)
                 if receipt_filename:
                     try:
                         with zf.open(receipt_filename) as f:
@@ -141,8 +183,9 @@ class InboxMoverCore:
                                 receipt_json = json.loads(content)
                                 data["receipt"] = receipt_json
                                 data["permitId"] = receipt_json.get("permitId", "DEFAULT")
-                            except json.JSONDecodeError:
-                                pass
+                            except json.JSONDecodeError as e:
+                                warning_msg = f"[WARNING: receipt.json is not a valid JSON file.]\n[Error details: {e}]\n[Suggestion: Please check for formatting errors such as trailing commas, or use a free online JSON checker/validator to fix it.]\n\n"
+                                data["receipt_raw"] = warning_msg + data["receipt_raw"]
                     except RuntimeError:
                         data["receipt_raw"] = "<receipt.json is password protected>"
                 return data
@@ -464,28 +507,42 @@ class InboxMoverCore:
                         progress_callback(i + 1, total)
 
         try:
-            if auto_extract and folder_data.get('has_valid_zip') and folder_data.get('zip_path'):
-                extract_zip_file(folder_data['zip_path'])
-            else:
-                folder_path = folder_data.get('folder_path')
-                folder_name = folder_data.get('folder_name')
-                for root, _, files in os.walk(folder_path):
-                    for file in files:
-                        src_path = os.path.join(root, file)
-                        if auto_extract and file.lower().endswith('.zip'):
-                            extract_zip_file(src_path)
+            folder_path = folder_data.get('folder_path')
+            folder_name = folder_data.get('folder_name')
+
+            for root, _, files in os.walk(folder_path):
+                for file in files:
+                    src_path = os.path.join(root, file)
+                    
+                    # Skip internal log files so they don't pollute the target data extraction
+                    if file.lower() == 'inbox process.log':
+                        continue
+                        
+                    if auto_extract and file.lower().endswith('.zip'):
+                        extract_zip_file(src_path)
+                    else:
+                        rel_path = os.path.relpath(src_path, folder_path)
+                        
+                        # Properly timestamp and route a loose receipt.json just like an extracted one
+                        if file.lower() == 'receipt.json':
+                            timestamp = datetime.datetime.now().strftime("%y%m%d-%H%M%S")
+                            new_filename = f"{timestamp}-{file}"
+                            if receipt_folder and os.path.isdir(receipt_folder):
+                                ext_path = os.path.join(receipt_folder, new_filename)
+                            else:
+                                ext_path = os.path.join(target_folder, os.path.dirname(rel_path), new_filename)
                         else:
-                            rel_path = os.path.relpath(src_path, folder_path)
                             ext_path = os.path.join(target_folder, rel_path)
-                            os.makedirs(os.path.dirname(ext_path), exist_ok=True)
-                            final_path = get_final_path(ext_path)
-                            shutil.copy2(src_path, final_path)
                             
-                            actions_log.append({
-                                "type": "copy",
-                                "source": f"{folder_name} -> {rel_path}",
-                                "destination": final_path
-                            })
+                        os.makedirs(os.path.dirname(ext_path), exist_ok=True)
+                        final_path = get_final_path(ext_path)
+                        shutil.copy2(src_path, final_path)
+                        
+                        actions_log.append({
+                            "type": "copy",
+                            "source": f"{folder_name} -> {rel_path}",
+                            "destination": final_path
+                        })
 
             if post_action == 'delete':
                 folder_path = folder_data.get('folder_path')
@@ -600,7 +657,7 @@ class InboxMoverGUI:
         title_frame.pack(side=tk.LEFT)
         self.lbl_title = ttk.Label(title_frame, text="Inbox Mover")
         self.lbl_title.pack(anchor=tk.W)
-        self.lbl_version = ttk.Label(title_frame, text=f"- v{VERSION}")
+        self.lbl_version = ttk.Label(title_frame, text=f"v{VERSION}")
         self.lbl_version.pack(anchor=tk.W)
         
         tools_frame = ttk.Frame(header_frame)
@@ -816,6 +873,7 @@ class InboxMoverGUI:
         self.lbl_title.config(font=(font_family, base + 14, "bold"))
         self.lbl_version.config(font=(font_family, base, "italic"))
         self.receipt_text.configure(font=("Courier", base))
+        self.receipt_text.tag_configure("warning", font=("Courier", base, "bold"))
 
     def increase_font(self):
         if self.base_font_size < 24:
@@ -951,6 +1009,7 @@ class InboxMoverGUI:
         self.root.option_add('*TCombobox*Listbox.selectForeground', '#ffffff')
         
         self.receipt_text.configure(bg=text_bg, fg=fg_color, insertbackground=fg_color, highlightbackground=entry_border, highlightcolor=entry_border)
+        self.receipt_text.tag_configure("warning", foreground="#ef4444") # Red color for warnings
 
     def toggle_theme(self):
         self.is_dark_mode = not self.is_dark_mode
@@ -1288,7 +1347,17 @@ You can also run this application via the command line for automation. Run `pyth
         self.zip_name_var.set(current_data['folder_name'])
         self.inbox_name_var.set(f"Inbox: {parent_dir}")
         self.permit_id_var.set(f"Config ID: {current_data['permitId']}")
-        self.set_receipt_text(current_data['receipt_raw'])
+        
+        # Build the new comprehensive Source Folder text display
+        file_list = current_data.get('file_list', [])
+        file_list_str = "\n".join(sorted(file_list)) if file_list else "<Folder is empty>"
+        receipt_raw = current_data.get('receipt_raw', '').strip()
+        
+        display_text = f"FILES IN SOURCE FOLDER:\n{'-'*40}\n{file_list_str}\n\n"
+        display_text += f"RECEIPT.JSON CONTENT:\n{'-'*40}\n"
+        display_text += receipt_raw if receipt_raw else "<No receipt.json found>"
+        
+        self.set_receipt_text(display_text)
         
         local_log_path = os.path.join(current_data['folder_path'], "Inbox Process.log")
         if os.path.exists(local_log_path):
@@ -1365,7 +1434,13 @@ You can also run this application via the command line for automation. Run `pyth
     def set_receipt_text(self, text):
         self.receipt_text.config(state=tk.NORMAL)
         self.receipt_text.delete(1.0, tk.END)
-        self.receipt_text.insert(tk.END, text if text else "<No receipt.json found in this transfer folder>")
+        self.receipt_text.insert(tk.END, text)
+        
+        # Apply red warning color to any JSON error lines
+        for i, line in enumerate(text.split('\n')):
+            if line.startswith("[WARNING:") or line.startswith("[Error details:") or line.startswith("[Suggestion:"):
+                self.receipt_text.tag_add("warning", f"{i+1}.0", f"{i+1}.end")
+                
         self.receipt_text.config(state=tk.DISABLED)
 
     def update_nav_buttons(self):

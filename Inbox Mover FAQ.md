@@ -53,6 +53,36 @@ Whenever a folder is processed using Inbox Mover, it drops a hidden log file ins
 
 You can even click the **📄 Process Log** button to see exactly which files they moved and where they put them\!
 
+### **7\. Can I control where my files go *before* I even upload them?**
+
+**Yes\! You can dictate exactly what Inbox Mover does by including your own receipt.json file in your upload.**
+
+If you create a simple text file named receipt.json and place it alongside your data (either inside your ZIP file or just sitting loose in the folder), Inbox Mover will automatically read it and force the tool to follow your rules.
+
+Here is an example of what you can type inside your custom receipt.json file, grouped logically from file extraction to final cleanup:
+
+{  
+    "permitId": "MY-PROJECT-123",  
+    "auto\_extract": true,  
+    "target\_folder": "C:\\\\Data\\\\My\_Project\\\\Incoming",  
+    "receipt\_folder": "C:\\\\Data\\\\My\_Project\\\\Receipts",  
+    "conflict\_resolution": "rename\_existing",  
+    "post\_processing": "move",  
+    "process\_folder": "C:\\\\Data\\\\Archive\\\\Processed"  
+}
+
+**What do these options mean?**
+
+* "permitId": A unique name or ID for your project/dataset.  
+* "auto\_extract": Set to true if you want the app to automatically unzip your files, or false to keep them zipped.  
+* "target\_folder": The exact folder path where your data files should land.  
+* "receipt\_folder": The folder where you want this receipt.json file to be copied and timestamped (useful for keeping an audit trail separate from the data).  
+* "conflict\_resolution": Choose "overwrite", "keep\_both", or "rename\_existing".  
+* "post\_processing": Choose "leave", "delete", or "move" (to clean up the inbox).  
+* "process\_folder": If you chose "move", tell it where the processed transfer- folder should be archived.
+
+If Inbox Mover detects these settings in your file, it will instantly apply them and turn the "Save Config" button Orange to let you know your custom rules are active\!
+
 ### **💡 Quick Summary: The "Set it and Forget it" Workflow**
 
 1. Open Inbox Mover.  
@@ -62,5 +92,3 @@ You can even click the **📄 Process Log** button to see exactly which files th
 5. Click **PROCESS FOLDER**.
 
 From now on, whenever that same type of file arrives, steps 3 and 4 are done for you automatically. Just click **PROCESS**\!
-
-Try it yourself using the instructions in [**README.md**](https://github.com/flow4u/InboxMover/blob/main/README.md)
