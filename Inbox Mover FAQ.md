@@ -8,27 +8,44 @@ Here are some common questions and scenarios to help you get the most out of it\
 
 ## **❓ Frequently Asked Questions**
 
-### **1\. I hate checking two different inboxes. Do I still have to do that?**
+### **1\. I hate checking two different inboxes. Can I automate this?**
 
-**No\!** That is exactly why Inbox Mover was created.
+**YES\!** That is exactly why Inbox Mover was created.
 
-By default, the application looks at both your i:\\ drive and your z:\\inbox at the same time. When you click the **↻ Refresh** button, it rounds up every single transfer- folder it finds in both places and puts them into one easy-to-read list for you to click through.
+By default, the application looks at both your i:\\ drive and your z:\\inbox at the same time. Click **↻ Scan** to aggregrate every **transfer-** folder from all locations in the master list.
 
-### **2\. I get different types of files. How do I make sure they go to the right place without me having to choose a folder every single time?**
+### **2\. How do I share rules with my colleagues? (The Team Feature)**
+This is one of Inbox Mover's most powerful features.
 
-Inbox Mover is smart—it remembers your preferences\! You only have to teach it once. It uses two methods to know where your files belong:
+* **Personal Mode**: Rules are stored only on your local machine.
 
-* **Scenario A: By File Name (Pattern Matching)**  
-  Let's say you frequently receive database backups that always start with Archive. You can type Archive\*.\* into the tool's **Auto-Match Pattern** box, set your Target Folder to C:\\My\_Backups, and click **Save Config**.  
-  *Next time a transfer folder arrives containing a file named Archive\_March.zip, Inbox Mover will instantly recognize it and have your backup folder already selected\!*  
-* **Scenario B: By Project/Permit (Config IDs)**  
-  Often, data arrives with an official "receipt" attached to it (a file called receipt.json). Inbox Mover reads this receipt to see which project or permit it belongs to. If you tell the tool that "Project A" belongs in the "Config Files" folder and save it, it will remember that rule forever.
+* **Team Shared Mode**: Select "Team Shared" in the Workspace settings and point it to a folder on a network drive. Any rule you save while in "Shared" mode is instantly available to everyone else on your team using that same network path. When you first connect to a shared folder, the app will even offer to Merge your local rules into the team database so you don't have to start from scratch.
 
-### **3\. Most of my data arrives in ZIP files. Do I still have to right-click and "Extract All" manually?**
+
+### **3\. How do I know if a colleague already processed a folder?**
+We built an automatic Paper Trail.
+Whenever a folder is processed, a hidden log is created inside it. If you select a folder in the queue that has already been handled, a blue status message will appear:
+
+*Latest: 2026-03-15 12:24:04 | User: stefan.vanaalst | Config: PROJECT_X*
+
+You can click the **📄 View Log** button next to the folder name to see exactly what they did.
+
+
+### **4\. I get different types of files. How do I make sure they go to the right place without me having to choose a folder every single time?**
+
+Inbox Mover remembers your preferences so you only have to "teach" it once. It uses a tiered logic system:
+
+* **Scenario A**: By **Config ID** (Priority): Most transfers include a receipt.json. The app reads this file to find a Project or Permit ID. If you save a rule for "Project_Alpha," any future folder with that ID will automatically load your saved paths.
+
+* **Scenario B**: By **Pattern Matching** of Filenames: If there is no ID, you can use the Pattern Match field. Enter a wildcard like **survey_*.dwg**. Next time a folder arrives containing a file that matches that pattern, Inbox Mover will recognize it and apply your routing rules automatically.
+
+
+### **5\. Most of my data arrives in ZIP files. Do I still have to right-click and "Extract All" manually?**
 
 **Not anymore.** Inbox Mover has an **Auto-Extract ZIP files** checkbox. If you leave this checked, the tool will automatically open the ZIP file and pull all the actual files out into your Target Folder. If you actually *want* to keep the ZIP file closed and just move the .zip file itself, simply uncheck the box\!
+In case of encrypted zips, a password input will pop up.
 
-### **4\. What happens if I move a file, but a file with that exact name already exists in my Target Folder? Will I lose my data?**
+### **6\. What happens if I move a file, but a file with that exact name already exists in my Target Folder? Will I lose my data?**
 
 Inbox Mover has built-in safety nets called **Conflict Resolution**. You can choose exactly how it behaves before you click process:
 
@@ -36,24 +53,18 @@ Inbox Mover has built-in safety nets called **Conflict Resolution**. You can cho
 * **Rename existing file:** It will rename your *old* file with a timestamp (so you know it's an older version), and put the new file in its place.  
 * **Overwrite:** It will simply replace the old file with the new one.
 
-### **5\. After I move the files, my inbox is still cluttered with empty transfer- folders. Can the tool clean this up?**
+### **7\. After I move the files, my inbox is still cluttered with empty transfer- folders. Can the tool clean this up?**
+**Yes**. Use the FOLDER section's Post Action setting:
 
-**Yes\!** Look at the **Post Processing** section on the screen.
+* **Leave**: Do nothing (folders stay in the inbox).
 
-Instead of choosing "Leave the files in place," you can choose:
+* **Delete**: Permanently delete the transfer- folder after successful extraction.
 
-* **Delete the files:** Once Inbox Mover successfully moves your data, it will completely delete the messy transfer- folder from your inbox.  
-* **Move to Processed Folder:** It will sweep the transfer- folder into a separate "Archive" or "Processed" folder of your choosing, keeping your main inbox completely clean but preserving a backup.
+* **Move**: Sweep the folder into a "Processed" or "Archive" directory of your choice.
+Just in case, InBox Mover also allows you to manually delete folders.
 
-### **6\. I share this workspace with colleagues. How do I know if someone else already processed a folder?**
 
-We built in an automatic paper trail\!
-
-Whenever a folder is processed using Inbox Mover, it drops a hidden log file inside that folder. If you click on a folder that has already been handled, Inbox Mover will instantly show you a blue message on the screen saying exactly **when** it was processed, and **which user** clicked the button (e.g., *Latest: 2026-03-15 12:24:04 SUCCESS | User: jsmith*).
-
-You can even click the **📄 Process Log** button to see exactly which files they moved and where they put them\!
-
-### **7\. Can I control where my files go *before* I even upload them?**
+### **8\. Can I control where my files go *before* I even upload them?**
 
 **Yes\! You can dictate exactly what Inbox Mover does by including your own receipt.json file in your upload.**
 
@@ -83,12 +94,24 @@ Here is an example of what you can type inside your custom receipt.json file, gr
 
 If Inbox Mover detects these settings in your file, it will instantly apply them and turn the "Save Config" button Orange to let you know your custom rules are active\!
 
-### **💡 Quick Summary: The "Set it and Forget it" Workflow**
+## ⌨️ Shortcuts for Power Users
 
-1. Open Inbox Mover.  
-2. Click **Next ⇨** to look at an arriving folder.  
-3. Choose where you want it to go, how to handle conflicts, and whether to delete the folder afterwards.  
-4. Click **Save Config**.  
-5. Click **PROCESS FOLDER**.
+Inbox Mover is designed for hands-on-keyboard speed:
 
-From now on, whenever that same type of file arrives, steps 3 and 4 are done for you automatically. Just click **PROCESS**\!
+* **Arrows (Up/Down or Left/Right)**: Cycle through the pending queue.
+
+* **Tab**: Cycle focus between Open, Delete, and Process Folders. **Tab** also works in the **Delete Folder** popup.
+
+* **Enter**: Execute the highlighted button (look for the ► arrows).
+
+
+
+## **💡 The "Set it and Forget it" Workflow**
+
+1. Set your **Target** and **Post Action**
+2. Use Pattern Matching
+3. Click 💾 Save   
+4. Increase/decrease font & resize
+5. Choose dark/light mode
+
+From now on, whenever that same type of file arrives, everything will be processed accordingly. Just click **PROCESS**\!
