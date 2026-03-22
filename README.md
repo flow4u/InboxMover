@@ -6,7 +6,7 @@
 
 See also [**Inbox Mover FAQ**](https://github.com/flow4u/InboxMover/blob/main/Inbox%20Mover%20FAQ.md) for a quick read how Inbox Mover can help you.
 
-![Inbox Mover Screenshot](https://github.com/flow4u/InboxMover/blob/main/InboxMover.png)
+![Inbox Mover Screenshot](https://github.com/flow4u/InboxMover/blob/main/Inbox_Mover.png)
 
 
 ## **📜 Open Source & Customization**
