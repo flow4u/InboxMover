@@ -1,4 +1,4 @@
-# **Inbox Mover (v0.10.1)**
+# **Inbox Mover (v0.11)**
 
 **Inbox Mover** is a cross-platform utility designed to process files in the **transfer-** folders found in **i:** and **z:\\inbox** on [**myDRE**](https://mydre.org)**.** 
 
@@ -52,8 +52,8 @@ Because Inbox Mover is a standalone script, "installing" it just means placing i
 
 ### **Windows Setup**
 
-1. Extract the ZIP file containing inbox\_mover.py.  
-2. Move the inbox\_mover.py file to C:\\scripts\\ *(You may need to create the "scripts" folder on your C: drive if it doesn't exist yet)*.  
+1. Download [**inbox\_mover.py**](https://github.com/flow4u/InboxMover/blob/main/inbox_mover.py).  
+2. Move the inbox\_mover.py file to C:\\helper\\ *(You may need to create the "helper" folder on your C: drive if it doesn't exist yet)*.  
 3. Right-click on inbox\_mover.py and select **"Create shortcut"**.  
 4. Right-click the newly created shortcut and select **"Properties"**.  
 5. In the Properties window, locate the **"Run"** dropdown menu, change it to **"Minimized"**, and click **OK**. *(This ensures the background command prompt stays out of your way when launching the app).*  
@@ -61,7 +61,7 @@ Because Inbox Mover is a standalone script, "installing" it just means placing i
 
 ### **Linux Setup**
 
-1. Extract the ZIP file containing inbox\_mover.py.  
+1. Download [**inbox\_mover.py**](https://github.com/flow4u/InboxMover/blob/main/inbox_mover.py).
 2. You can place it in your \~/Desktop directory or in a shared location like /opt/InboxMover if multiple users need access.
 
 *Note: The application will automatically create a permit\_configs folder in the same directory as the script to save your settings and logs.*
@@ -74,9 +74,12 @@ To launch the graphical interface, double-click the shortcut you created on your
 
 Inbox Mover is optimized for speed with robust keyboard navigation:
 
-* **Left / Right Arrows:** Cycle rapidly through the discovered transfer folders without needing to click the Prev/Next buttons.  
-* **Tab / Shift-Tab:** Instantly toggle focus between the **PROCESS FOLDER** and **Save Config** buttons (indicated by ► ◄ arrows).  
-* **Enter:** Trigger the currently focused action button immediately.
+⌨️ Keyboard Shortcuts
+
+* **Arrows (↑ ↓ ← →)**: Navigate the sidebar queue.
+* **Tab / Shift-Tab**: Cycle focus between Delete Folder, Save Rule, and PROCESS FOLDER.
+* **Enter**: Trigger the focused button (indicated by ► ◄ arrows).
+
 
 **UI Controls:** You can adjust the application's appearance using the buttons in the top right:
 
@@ -85,51 +88,44 @@ Inbox Mover is optimized for speed with robust keyboard navigation:
 * **A+ / A-:** Increase or decrease the application font size.  
 * **Reset View:** Snap the window back to its default size (1120x950) and default font size (11).
 
-### **1\. Directories**
+ 
+### **1\. SETTINGS WORKSPACE (VM Synchronization)**
 
-* **Search Folder 1 & 2:** The root directories where the app looks for child folders starting with transfer-. You can specify up to two search locations (defaults to i:/ and z:/inbox).  
-* **Target Folder:** The directory where the contents of the ZIP files will be extracted. Missing folders are created automatically.  
-* **Processed Folder:** (Optional) The directory where the entire transfer folder is moved if the "Move" post-action is selected.  
-* **Receipt Folder:** (Optional) A dedicated folder where the receipt.json will be extracted (prepended with a timestamp to prevent overwriting).
+In the sidebar, choose your workspace mode:
+* Personal (Local): Keeps rules and logs on the current machine (in permit_configs).
+* Team Shared: Points the app to a shared drive (like a Project drive). This ensures that if you set a rule in VM-A, it is instantly available in VM-B.
 
-### **2\. Navigation**
+ 
+### **2\. PENDING QUEUE**
 
-* Use the **'⇦ Prev'** and **'Next ⇨'** buttons (or your keyboard's Left/Right arrow keys) to cycle through the found transfer folders.  
-* Click **'↻ Refresh'** to manually rescan the Search Folders for new or modified transfer folders.  
-* Use the **"📂 Open Folder"** button to quickly view the selected transfer- folder in your native file explorer.
+The sidebar shows all detected transfer- folders:
+* **✓**: Folder is valid and ready to process.
+* **✗**: Folder appears empty or invalid.
 
-### **3\. Conflict Resolution (If a file already exists)**
+Use Up/Down or Left/Right arrows to cycle through the queue.
 
-* **Overwrite:** Replaces the existing file in the target folder with the new one.  
-* **Keep both:** Extracts the new file and adds a number to its filename (e.g., file (1).txt).  
-* **Rename existing:** Renames the file *already on your disk* by prepending a timestamp (e.g., YYMMDD-HHMMSS\_filename.txt), then extracts the new file normally.
+### **3\. DESTINATIONS**
 
-### **4\. Post Processing**
+The main area shows a combined view of all files in the source folder followed by the raw content of the receipt.json. Warnings appear in bold red if the receipt contains formatting errors (like trailing commas). 
 
-* **Leave the files in place:** Leaves the source files where they are.  
-* **Delete the files:** Permanently deletes the entire transfer folder and all its contents after successful extraction.  
-* **Move the files to Processed Folder:** Moves the entire transfer folder and all its contents to the Processed Folder.
 
-### **5\. Configurations & Config IDs**
+### **4\. PROCESSING RULES**
 
-The application reads the receipt.json file inside the ZIP to identify a **Config ID** (previously Permit ID).
+* **Config ID**: Rules are saved based on the permitId found in the receipt.
+* **Pattern Match**: Route files based on name (e.g., Archive*.*) if no receipt is present.
+* **Target**: Where data lands.
+* **Processed**: Where the original folder goes (if "Move" is selected).
+* **Receipt**: Where the audit-trailed receipt.json lands.
 
-* If no receipt.json is found, a "DEFAULT" Config ID is assigned. The app will use your saved DEFAULT settings as a fallback.  
-* Once you set up your folders and rules for a specific Config ID, click **'Save Config'**.  
-* The next time you encounter a transfer folder with that exact Config ID, the application will automatically load your saved folder paths and settings over the DEFAULT baseline.  
-* **Manage Configs:** Click the **⚙ Manage** button to edit or view all your saved configurations in one place.
 
-### **6\. Auto-Match Pattern (Filename Routing)**
+### **5\. FILE INSPECTOR**
 
-If a transfer folder doesn't have a receipt.json but contains specific files (like database dumps or logs), you can route it based on a filename pattern.
+The main area shows a combined view of all files in the source folder followed by the raw content of the receipt.json. Warnings appear in bold red if the receipt contains formatting errors (like trailing commas).
 
-* **How to use:** Enter a wildcard pattern like backup\*.sql in the **Auto-Match Pattern** field.  
-* Configure your desired Target Folder and post-actions, then click **Save Config**.  
-* The next time a transfer folder contains any file matching that pattern (e.g., backup\_2026.sql), the application will automatically detect it and load those specific settings\!  
-* **Manage Patterns:** Click the **⚙ Manage** button next to the input field to view, edit, or delete all of your saved filename routing patterns.  
-* *Note: Pattern matching is subordinate to a valid Config ID but overrides the DEFAULT config baseline.*
+* **Manageg Rules**: Here the pattern matching rules and config rules can be managed. See ? in the application for examples
 
-### **7\. Advanced Logging & Overrides**
+
+### **6\. Advanced Logging & Overrides**
 
 * **Auto-Extract Checkbox:** By default, ZIP files are extracted. If you simply want to move/copy the .zip archive itself into your Target Folder, uncheck the "Auto-Extract ZIP files" box.  
 * **Global Audit Logging:** Every processed file and resolved conflict is written to a machine-readable JSONL file (process\_log.jsonl). Click **'📄 View Log'** to inspect it.  
