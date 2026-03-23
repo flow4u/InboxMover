@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Inbox Mover v0.11.0
+Inbox Mover v0.14.8
 A utility to process and extract zip files containing a receipt.json,
 with both a Material-inspired GUI and a CLI mode.
 Runs entirely on standard Python libraries.
@@ -24,7 +24,7 @@ import webbrowser
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
 
-VERSION = "0.11.0"
+VERSION = "0.14.8"
 
 # --------------------------------------------------------------------------- #
 # HELPERS
@@ -86,6 +86,45 @@ class InboxMoverCore:
 
         self.set_workspace()
 
+    def translate_path(self, path):
+        """
+        Translates paths between Windows and Linux environments for specific known mounts.
+        Windows z:\ <-> Linux /mnt/data/
+        Windows i:\ <-> Linux /mnt/inbox/
+        """
+        if not path or not isinstance(path, str):
+            return path
+        
+        # Normalize slashes for internal check
+        p_check = path.replace('\\', '/')
+        
+        if sys.platform == "win32":
+            # Translate Linux -> Windows
+            if p_check.startswith("/mnt/data/"):
+                suffix = path[10:].replace('/', '\\')
+                return f"z:\\{suffix}"
+            elif p_check.startswith("/mnt/inbox/"):
+                suffix = path[11:].replace('/', '\\')
+                return f"i:\\{suffix}"
+            elif p_check == "/mnt/data":
+                return "z:\\"
+            elif p_check == "/mnt/inbox":
+                return "i:\\"
+        else:
+            # Translate Windows -> Linux
+            if p_check.lower().startswith("z:/"):
+                suffix = path[3:].replace('\\', '/')
+                return f"/mnt/data/{suffix}"
+            elif p_check.lower().startswith("i:/"):
+                suffix = path[3:].replace('\\', '/')
+                return f"/mnt/inbox/{suffix}"
+            elif p_check.lower() in ("z:", "z:/"):
+                return "/mnt/data/"
+            elif p_check.lower() in ("i:", "i:/"):
+                return "/mnt/inbox/"
+                
+        return path
+
     def set_workspace(self):
         """Configure the active directory and reload cache."""
         if self.use_global and self.global_dir:
@@ -141,15 +180,22 @@ class InboxMoverCore:
     def load_app_settings(self):
         """App settings are always stored locally."""
         settings_path = os.path.join(self.local_config_dir, "app_settings.json")
+        settings = {"dark_mode": True, "font_size": 11, "window_geometry": "1120x950", 
+                    "search_folder_1": "", "search_folder_2": "", 
+                    "use_global": False, "global_dir": ""}
+        
         if os.path.exists(settings_path):
             try:
                 with open(settings_path, 'r', encoding='utf-8') as f:
-                    return json.load(f)
+                    loaded = json.load(f)
+                    settings.update(loaded)
             except Exception:
                 pass
-        return {"dark_mode": True, "font_size": 11, "window_geometry": "1120x950", 
-                "search_folder_1": "", "search_folder_2": "", 
-                "use_global": False, "global_dir": ""}
+        
+        # Apply path translation to search folders
+        settings["search_folder_1"] = self.translate_path(settings.get("search_folder_1", ""))
+        settings["search_folder_2"] = self.translate_path(settings.get("search_folder_2", ""))
+        return settings
 
     def save_app_settings(self, settings):
         settings_path = os.path.join(self.local_config_dir, "app_settings.json")
@@ -197,9 +243,15 @@ class InboxMoverCore:
             "receipt_raw": "",
             "has_valid_zip": False,
             "can_process": False,
+            "has_log": False,
             "file_list": []
         }
         
+        # Check for presence of logs
+        if os.path.exists(os.path.join(folder_path, "Process.log")) or \
+           os.path.exists(os.path.join(folder_path, "Inbox Process.log")):
+            data["has_log"] = True
+
         valid_zip_found = False
         file_list = []
         loose_receipt_data = None
@@ -370,7 +422,7 @@ class InboxMoverCore:
             target_local_dir = folder_data.get('folder_path')
             
         if target_local_dir and os.path.isdir(target_local_dir):
-            local_log_path = os.path.join(target_local_dir, "Inbox Process.log")
+            local_log_path = os.path.join(target_local_dir, "Process.log")
             
             ts = log_entry["timestamp"].replace("T", " ")[:19]
             lines = [f"[{ts}] | User: {log_entry['user']} | Config: {log_entry['config_id']} | Folder: {log_entry['folder_name']}"]
@@ -398,11 +450,11 @@ class InboxMoverCore:
                 except Exception:
                     pass
                         
-                try:
-                    with open(local_log_path, 'w', encoding='utf-8') as f:
-                        f.write(new_log_text + existing_content)
-                except Exception:
-                    pass
+            try:
+                with open(local_log_path, 'w', encoding='utf-8') as f:
+                    f.write(new_log_text + existing_content)
+            except Exception:
+                pass
 
         for act in actions:
             dest = act.get("destination", "")
@@ -580,7 +632,7 @@ class InboxMoverCore:
             for root, _, files in os.walk(folder_path):
                 for file in files:
                     src_path = os.path.join(root, file)
-                    if file.lower() == 'inbox process.log':
+                    if file.lower() in ('process.log', 'inbox process.log'):
                         continue
                         
                     if auto_extract and file.lower().endswith('.zip'):
@@ -668,11 +720,9 @@ class InboxMoverGUI:
         self.workspace_mode_var = tk.StringVar(value="global" if self.core.use_global else "local")
         self.global_dir_var = tk.StringVar(value=self.core.global_dir)
 
-        sf1 = settings.get("search_folder_1", settings.get("search_folder", ""))
+        sf1 = settings.get("search_folder_1", "")
         sf2 = settings.get("search_folder_2", "")
-        if not sf1: sf1 = "i:/"
-        if not sf2: sf2 = "z:/inbox"
-
+        
         self.search_folder_1_var = tk.StringVar(value=sf1)
         self.search_folder_2_var = tk.StringVar(value=sf2)
         
@@ -832,6 +882,7 @@ class InboxMoverGUI:
         utils_frame = ttk.Frame(header_row, style="Card.TFrame")
         utils_frame.pack(side=tk.RIGHT)
         self.btn_open_local_log = ttk.Button(utils_frame, text="📄 View Log", command=self.open_local_log, takefocus=0)
+        self.btn_open_local_log.pack(side=tk.RIGHT)
 
         badge_row = ttk.Frame(self.detail_container, style="Card.TFrame")
         badge_row.pack(fill=tk.X, pady=(0, 15))
@@ -901,7 +952,14 @@ class InboxMoverGUI:
         rule_actions_group = ttk.Frame(card_actions, style="Card.TFrame")
         rule_actions_group.pack(side=tk.LEFT)
         
-        ttk.Label(rule_actions_group, text="RULES", font=("Segoe UI", 7, "bold"), foreground="#757575").pack(anchor=tk.W, padx=2)
+        rule_header_row = ttk.Frame(rule_actions_group, style="Card.TFrame")
+        rule_header_row.pack(fill=tk.X, padx=2)
+        ttk.Label(rule_header_row, text="RULES", font=("Segoe UI", 7, "bold"), foreground="#757575").pack(side=tk.LEFT)
+        
+        # Visual workspace indicator next to RULES label
+        self.lbl_active_ws = ttk.Label(rule_header_row, text="", font=("Segoe UI", 7, "bold"), padding=(4, 0))
+        self.lbl_active_ws.pack(side=tk.LEFT, padx=(5, 0))
+        
         rule_btns = ttk.Frame(rule_actions_group, style="Card.TFrame")
         rule_btns.pack(fill=tk.X)
 
@@ -946,7 +1004,7 @@ class InboxMoverGUI:
         self.btn_process.bind('<Shift-Tab>', lambda e: self.focus_btn(self.btn_delete_folder))
         
         # Apply Enter key handling to all buttons
-        for btn in [self.btn_open_folder, self.btn_delete_folder, self.btn_process, self.btn_save_config, self.btn_manage_configs]:
+        for btn in [self.btn_open_folder, self.btn_delete_folder, self.btn_process, self.btn_save_config, self.btn_manage_configs, self.btn_open_local_log]:
             btn.bind('<Return>', lambda e, b=btn: self.invoke_btn(b))
 
         self.btn_open_folder.bind('<FocusIn>', lambda e: self.refresh_btn_text(self.btn_open_folder))
@@ -959,8 +1017,13 @@ class InboxMoverGUI:
         self.btn_save_config.bind('<FocusOut>', lambda e: self.refresh_btn_text(self.btn_save_config))
         self.btn_manage_configs.bind('<FocusIn>', lambda e: self.refresh_btn_text(self.btn_manage_configs))
         self.btn_manage_configs.bind('<FocusOut>', lambda e: self.refresh_btn_text(self.btn_manage_configs))
+        self.btn_open_local_log.bind('<FocusIn>', lambda e: self.refresh_btn_text(self.btn_open_local_log))
+        self.btn_open_local_log.bind('<FocusOut>', lambda e: self.refresh_btn_text(self.btn_open_local_log))
 
         self.placeholder_frame.pack(fill=tk.BOTH, expand=True)
+
+        # Initial workspace label update
+        self.apply_workspace()
 
     def show_status_popup(self, title, message):
         """Display a themed modal popup for long-running operations."""
@@ -1074,7 +1137,8 @@ class InboxMoverGUI:
         btn_frame.pack(side=tk.RIGHT)
         
         def browse():
-            folder = filedialog.askdirectory()
+            # Ensure the browse dialog is on top of the caller
+            folder = filedialog.askdirectory(parent=parent.winfo_toplevel())
             if folder:
                 str_var.set(folder)
                 if callback: callback()
@@ -1082,7 +1146,7 @@ class InboxMoverGUI:
         def open_dir():
             path = str_var.get()
             if not path or not os.path.isdir(path):
-                messagebox.showwarning("Warning", "The specified folder does not exist.")
+                messagebox.showwarning("Warning", "The specified folder does not exist.", parent=parent.winfo_toplevel())
                 return
             if sys.platform == "win32": os.startfile(path)
             elif sys.platform == "darwin": subprocess.call(["open", path])
@@ -1156,11 +1220,15 @@ class InboxMoverGUI:
             btn, active, eb, border = "#333333", "#424242", "#2c2c2c", "#424242"
             pbg, pact = "#388e3c", "#4caf50"
             badge_bg, badge_fg = "#37474f", "#81d4fa"
+            personal_bg, personal_fg = "#2e7d32", "#ffffff"  # Green badge for Personal
+            team_bg, team_fg = "#1565c0", "#ffffff"        # Blue badge for Team
         else:
             bg, card, fg, dim, acc = "#f0f2f5", "#ffffff", "#212121", "#757575", "#1976d2"
             btn, active, eb, border = "#e0e0e0", "#bdbdbd", "#ffffff", "#bdbdbd"
             pbg, pact = "#388e3c", "#2e7d32"
             badge_bg, badge_fg = "#e3f2fd", "#0277bd"
+            personal_bg, personal_fg = "#c8e6c9", "#1b5e20"
+            team_bg, team_fg = "#bbdefb", "#0d47a1"
             
         self.root.configure(bg=bg)
         self.theme_btn.config(text="☀" if self.is_dark_mode else "☾")
@@ -1189,6 +1257,11 @@ class InboxMoverGUI:
         style.configure("CardDim.TLabel", background=card, foreground=dim)
         style.configure("CardAccent.TLabel", background=card, foreground=acc)
         style.configure("Badge.TLabel", background=badge_bg, foreground=badge_fg, padding=(6, 2))
+        
+        # Workspace Status Styles
+        style.configure("WSLocal.TLabel", background=personal_bg, foreground=personal_fg, padding=(4, 0))
+        style.configure("WSGlobal.TLabel", background=team_bg, foreground=team_fg, padding=(4, 0))
+        
         style.configure("Card.TRadiobutton", background=card, foreground=fg)
         style.map("Card.TRadiobutton", background=[('active', card)])
         style.configure("Card.TCheckbutton", background=card, foreground=fg)
@@ -1207,6 +1280,7 @@ class InboxMoverGUI:
         self.apply_theme()
         self.apply_fonts() 
         self.save_settings()
+        self.apply_workspace() # Refresh workspace badge colors
 
     def save_settings(self):
         self.core.save_app_settings({"dark_mode": self.is_dark_mode, "font_size": self.base_font_size, "window_geometry": self.root.geometry(), "search_folder_1": self.search_folder_1_var.get(), "search_folder_2": self.search_folder_2_var.get(), "use_global": self.core.use_global, "global_dir": self.core.global_dir})
@@ -1224,7 +1298,7 @@ class InboxMoverGUI:
 
     def view_log(self):
         if not os.path.exists(self.core.log_file):
-            messagebox.showinfo("Log Empty", "No log file has been created yet.")
+            messagebox.showinfo("Log Empty", "No log file has been created yet.", parent=self.root)
             return
         
         bg_col = "#1e1e1e" if self.is_dark_mode else "#f9fafb"
@@ -1276,16 +1350,24 @@ class InboxMoverGUI:
 
     def open_local_log(self):
         if self.current_index < 0 or not self.folders_data: return
-        p = os.path.join(self.folders_data[self.current_index]['folder_path'], "Inbox Process.log")
-        if not os.path.exists(p): return
+        folder_path = self.folders_data[self.current_index]['folder_path']
+        
+        # Check for both standard and legacy local logs
+        p1 = os.path.join(folder_path, "Process.log")
+        p2 = os.path.join(folder_path, "Inbox Process.log")
+        
+        active_log = p1 if os.path.exists(p1) else (p2 if os.path.exists(p2) else None)
+        
+        if not active_log:
+            return
         
         bg_col = "#1e1e1e" if self.is_dark_mode else "#f9fafb"
         fg_col = "#ffffff" if self.is_dark_mode else "#000000"
         border_col = "#444444" if self.is_dark_mode else "#d1d5db"
         
         w = tk.Toplevel(self.root)
-        w.title("Local Process Log")
-        w.geometry("900x600")
+        w.title(f"Folder Process Log - {os.path.basename(active_log)}")
+        w.geometry("1000x700")
         w.configure(bg=bg_col)
         w.attributes("-topmost", True)
         w.transient(self.root)
@@ -1293,6 +1375,13 @@ class InboxMoverGUI:
         
         f = ttk.Frame(w, padding="15", style="Card.TFrame")
         f.pack(fill=tk.BOTH, expand=True)
+        
+        # Header in popup
+        header = ttk.Frame(f, style="Card.TFrame")
+        header.pack(fill=tk.X, pady=(0, 10))
+        ttk.Label(header, text="Local Audit Trail", font=("Segoe UI", 12, "bold")).pack(side=tk.LEFT)
+        ttk.Label(header, text=f"File: {active_log}", style="CardDim.TLabel").pack(side=tk.RIGHT)
+        
         txt = tk.Text(f, wrap=tk.WORD, font=("Courier", self.base_font_size), relief="flat", highlightthickness=1)
         txt.configure(bg=bg_col, fg=fg_col, insertbackground=fg_col, highlightbackground=border_col)
         txt.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
@@ -1301,24 +1390,42 @@ class InboxMoverGUI:
         txt.configure(yscrollcommand=sb.set)
         sb.pack(side=tk.RIGHT, fill=tk.Y)
         
-        txt.tag_configure("success", foreground="#10b981")
+        # Enhanced syntax highlighting for log readability
+        txt.tag_configure("success", foreground="#10b981", font=("Courier", self.base_font_size, "bold"))
+        txt.tag_configure("error", foreground="#ef4444", font=("Courier", self.base_font_size, "bold"))
+        txt.tag_configure("conflict", foreground="#f59e0b")
+        txt.tag_configure("action", foreground="#3b82f6")
+        txt.tag_configure("dim", foreground="#6b7280")
+
         try:
-            with open(p, 'r', encoding='utf-8') as file:
+            with open(active_log, 'r', encoding='utf-8') as file:
                 lines = file.readlines()
             for line in lines:
-                tag = "success" if "SUCCESS" in line else ""
+                tag = ""
+                if "SUCCESS" in line.upper(): tag = "success"
+                elif "ERROR" in line.upper(): tag = "error"
+                elif "CONFLICT" in line.upper(): tag = "conflict"
+                elif any(x in line.upper() for x in ("EXTRACT:", "COPY:")): tag = "action"
+                elif line.startswith("-") or line.startswith("["): tag = "dim"
+                
                 txt.insert(tk.END, line, tag)
-        except Exception: pass
+        except Exception as e:
+            txt.insert(tk.END, f"Error reading log file: {e}")
+            
         txt.config(state=tk.DISABLED)
         w.lift()
         w.focus_force()
-        btn_close = ttk.Button(w, text="Close Documentation", command=w.destroy, width=25)
-        btn_close.pack(pady=(10, 15))
+        
+        footer = ttk.Frame(w, padding=(0, 0, 0, 15), style="Card.TFrame")
+        footer.pack(fill=tk.X)
+        btn_close = ttk.Button(footer, text="Close Audit", command=w.destroy, width=25)
+        btn_close.pack()
         btn_close.bind('<Return>', lambda e: btn_close.invoke())
+        w.bind('<Escape>', lambda e: w.destroy())
 
     def clear_log(self):
         if not os.path.exists(self.core.log_file): return
-        if messagebox.askyesno("Confirm Clear", "Delete all processing logs?"):
+        if messagebox.askyesno("Confirm Clear", "Delete all processing logs?", parent=self.root):
             open(self.core.log_file, 'w').close()
 
     def show_help(self):
@@ -1407,7 +1514,7 @@ If a folder lacks a valid `permitId`, use **Pattern Match** to route by filename
 
 # Logging
 * **Global Audit:** Viewable via **📄 View Log** (stored in workspace).
-* **Local Context:** `Inbox Process.log` is created inside the transfer folder itself, listing every file operation for that specific transfer.
+* **Local Context:** `Process.log` is created inside the transfer folder itself, listing every file operation for that specific transfer.
 """
         
         for line in doc.split('\n'):
@@ -1445,7 +1552,7 @@ If a folder lacks a valid `permitId`, use **Pattern Match** to route by filename
         self.root.bind("<Down>", self.next_zip)
 
     def browse_global_dir(self):
-        f = filedialog.askdirectory(title="Shared Settings Folder")
+        f = filedialog.askdirectory(title="Shared Settings Folder", parent=self.root)
         if f:
             if os.path.basename(f) != "permit_configs": f = os.path.join(f, "permit_configs")
             self.global_dir_var.set(f)
@@ -1453,40 +1560,72 @@ If a folder lacks a valid `permitId`, use **Pattern Match** to route by filename
             self.apply_workspace()
 
     def apply_workspace(self, *args):
-        om, og = ("global" if self.core.use_global else "local"), self.core.global_dir
         nm, ng = self.workspace_mode_var.get(), self.global_dir_var.get().strip()
+        
+        # Guard against recursive update loops when syncing from Manage Rules popup
+        old_mode = "global" if self.core.use_global else "local"
+        if nm == old_mode and self.core.global_dir == ng:
+            return
+
         self.entry_global_dir.config(state=tk.NORMAL if nm == "global" else tk.DISABLED)
         self.btn_browse_global.config(state=tk.NORMAL if nm == "global" else tk.DISABLED)
         self.core.use_global = (nm == "global")
         self.core.global_dir = ng
         self.core.set_workspace()
         self.save_settings()
-        if nm == "global" and ng and os.path.isdir(ng) and (om == "local" or og != ng):
+        
+        # Update Visual Status Label
+        if nm == "global":
+            self.lbl_active_ws.config(text="TEAM SHARED", style="WSGlobal.TLabel")
+        else:
+            self.lbl_active_ws.config(text="PERSONAL", style="WSLocal.TLabel")
+
+        if nm == "global" and ng and os.path.isdir(ng) and (old_mode == "local"):
             self.prompt_and_merge_configs(ng)
-        self.update_display()
+            
+        self.on_search_folder_changed()
 
     def prompt_and_merge_configs(self, gdir):
         ldir = self.core.local_config_dir
         lc = [f for f in os.listdir(ldir) if f.endswith('.json') and f not in ('app_settings.json', 'patterns.json', 'DEFAULT.json')]
         if not lc: return
-        if messagebox.askyesno("Merge", f"Copy {len(lc)} local rules to shared workspace?"):
+        if messagebox.askyesno("Merge", f"Copy {len(lc)} local rules to shared workspace?", parent=self.root):
             for f in lc:
                 d = os.path.join(gdir, f)
                 if not os.path.exists(d): shutil.copy2(os.path.join(ldir, f), d)
             self.core.reload_cache()
 
-    def on_search_folder_changed(self, startup=False):
+    def on_search_folder_changed(self, startup=False, maintain_selection=False):
         f1, f2 = self.search_folder_1_var.get(), self.search_folder_2_var.get()
         s = []
         if f1 and os.path.isdir(f1): s.append(f1)
         if f2 and os.path.isdir(f2): s.append(f2)
+        
+        # Store index to try and maintain it later
+        old_idx = self.current_index
+
         if s:
             self.folders_data = self.core.find_transfer_folders(s)
             self.queue_listbox.delete(0, tk.END)
-            for d in self.folders_data: self.queue_listbox.insert(tk.END, ("✓ " if d['can_process'] else "✗ ") + d['folder_name'])
+            for d in self.folders_data: 
+                # Reverted from emojis to standard text icons for better Linux support
+                status_icon = "✓ " if d['can_process'] else "✗ "
+                # Separate text icon for folders that have Process.log
+                log_icon = "(L) " if d.get('has_log') else ""
+                
+                self.queue_listbox.insert(tk.END, status_icon + log_icon + d['folder_name'])
+                
+                # Make the line red to signify error state
+                if not d['can_process']:
+                    self.queue_listbox.itemconfig(tk.END, foreground='#ef4444')
+            
             if self.folders_data:
-                self.current_index = 0
-                self.queue_listbox.selection_set(0)
+                if maintain_selection and old_idx >= 0:
+                    self.current_index = max(0, min(old_idx, len(self.folders_data) - 1))
+                else:
+                    self.current_index = 0
+                
+                self.queue_listbox.selection_set(self.current_index)
                 self.nav_count_var.set(f"{len(self.folders_data)} Folders")
                 self.update_display()
             else:
@@ -1528,16 +1667,25 @@ If a folder lacks a valid `permitId`, use **Pattern Match** to route by filename
         self.permit_id_var.set(f"Config: {cd['permitId']}")
         self.set_receipt_text(f"FILES:\n{'-'*20}\n" + "\n".join(sorted(cd['file_list'])) + "\n\nRECEIPT:\n" + (cd['receipt_raw'] or "None"))
         
-        lp = os.path.join(cd['folder_path'], "Inbox Process.log")
-        if os.path.exists(lp):
+        # Check for standard or legacy local logs
+        p1 = os.path.join(cd['folder_path'], "Process.log")
+        p2 = os.path.join(cd['folder_path'], "Inbox Process.log")
+        active_local_log = p1 if os.path.exists(p1) else (p2 if os.path.exists(p2) else None)
+        
+        if active_local_log:
             try:
-                with open(lp, 'r', encoding='utf-8') as f: self.last_processed_var.set("Latest: " + f.readline().split(' | Config: ')[0])
+                with open(active_local_log, 'r', encoding='utf-8') as f: 
+                    self.last_processed_var.set("Latest: " + f.readline().split(' | Config: ')[0])
             except Exception: pass
-        else: self.last_processed_var.set("")
+            self.btn_open_local_log.config(state=tk.NORMAL)
+        else: 
+            self.last_processed_var.set("")
+            self.btn_open_local_log.config(state=tk.DISABLED)
         
         self.target_folder_var.set(""); self.target_zip_folder_var.set(""); self.receipt_folder_var.set("")
         self.active_pattern_var.set(""); self.auto_extract_var.set(True)
         
+        # Load rules
         self._apply_config_mapping(self.core.load_config("DEFAULT"))
         if cd['permitId'] == "DEFAULT":
             for p, cfg in self.core.load_patterns().items():
@@ -1546,10 +1694,11 @@ If a folder lacks a valid `permitId`, use **Pattern Match** to route by filename
         else:
             self._apply_config_mapping(self.core.load_config(cd['permitId']))
             
+        # Apply receipt overrides with translation
         r = cd.get('receipt') or {}
-        if r.get('target_folder'): self.target_folder_var.set(r['target_folder'])
-        if r.get('process_folder'): self.target_zip_folder_var.set(r['process_folder'])
-        if r.get('receipt_folder'): self.receipt_folder_var.set(r['receipt_folder'])
+        if r.get('target_folder'): self.target_folder_var.set(self.core.translate_path(r['target_folder']))
+        if r.get('process_folder'): self.target_zip_folder_var.set(self.core.translate_path(r['process_folder']))
+        if r.get('receipt_folder'): self.receipt_folder_var.set(self.core.translate_path(r['receipt_folder']))
         if r.get('conflict_resolution'): self.conflict_action_var.set(r['conflict_resolution'])
         if r.get('post_processing'): self.post_action_var.set(r['post_processing'])
         
@@ -1559,17 +1708,26 @@ If a folder lacks a valid `permitId`, use **Pattern Match** to route by filename
         self.update_nav_buttons()
         self.check_unsaved_changes()
 
+        # PRESELECTION LOGIC: Delete for errors, Process for valid
         if cd['can_process']:
             self.btn_process.focus_set()
         else:
             self.btn_delete_folder.focus_set()
-        self.refresh_btn_text(self.btn_process)
-        self.refresh_btn_text(self.btn_delete_folder)
+        
+        # Refresh visuals for all key buttons to update "►" indicators
+        for btn in [self.btn_process, self.btn_delete_folder, self.btn_open_folder, self.btn_save_config, self.btn_manage_configs, self.btn_open_local_log]:
+            self.refresh_btn_text(btn)
 
     def _apply_config_mapping(self, cfg):
         if not cfg: return
-        for k, v in [('target_folder', self.target_folder_var), ('target_zip_folder', self.target_zip_folder_var), ('receipt_folder', self.receipt_folder_var), ('conflict_action', self.conflict_action_var), ('post_action', self.post_action_var)]:
-            if cfg.get(k): v.set(cfg[k])
+        for k, v in [('target_folder', self.target_folder_var), 
+                    ('target_zip_folder', self.target_zip_folder_var), 
+                    ('receipt_folder', self.receipt_folder_var)]:
+            if cfg.get(k):
+                v.set(self.core.translate_path(cfg[k]))
+        
+        if cfg.get('conflict_action'): self.conflict_action_var.set(cfg['conflict_action'])
+        if cfg.get('post_action'): self.post_action_var.set(cfg['post_action'])
         if 'auto_extract' in cfg: self.auto_extract_var.set(cfg['auto_extract'])
 
     def set_receipt_text(self, text):
@@ -1589,7 +1747,7 @@ If a folder lacks a valid `permitId`, use **Pattern Match** to route by filename
         self.btn_save_config.config(state=tk.NORMAL if cp else tk.DISABLED)
         self.btn_delete_folder.config(state=tk.NORMAL if has else tk.DISABLED)
         self.btn_open_folder.config(state=tk.NORMAL if has else tk.DISABLED)
-        self.refresh_btn_text(self.btn_process); self.refresh_btn_text(self.btn_save_config); self.refresh_btn_text(self.btn_delete_folder); self.refresh_btn_text(self.btn_open_folder); self.refresh_btn_text(self.btn_manage_configs)
+        self.refresh_btn_text(self.btn_process); self.refresh_btn_text(self.btn_save_config); self.refresh_btn_text(self.btn_delete_folder); self.refresh_btn_text(self.btn_open_folder); self.refresh_btn_text(self.btn_manage_configs); self.refresh_btn_text(self.btn_open_local_log)
 
     def check_unsaved_changes(self, *args):
         if self.current_index < 0: return
@@ -1597,7 +1755,21 @@ If a folder lacks a valid `permitId`, use **Pattern Match** to route by filename
         cur = {"target_folder": self.target_folder_var.get(), "target_zip_folder": self.target_zip_folder_var.get(), "receipt_folder": self.receipt_folder_var.get(), "conflict_action": self.conflict_action_var.get(), "post_action": self.post_action_var.get(), "auto_extract": self.auto_extract_var.get()}
         ap = self.active_pattern_var.get().strip()
         saved = self.core.load_patterns().get(ap) if ap else self.core.load_config(cd['permitId'])
-        unsaved = (cur != (saved or {"target_folder": "", "target_zip_folder": "", "receipt_folder": "", "conflict_action": "overwrite", "post_action": "leave", "auto_extract": True}))
+        
+        # We compare translated values to avoid false positives in "unsaved" state
+        if saved:
+            translated_saved = {
+                "target_folder": self.core.translate_path(saved.get("target_folder", "")),
+                "target_zip_folder": self.core.translate_path(saved.get("target_zip_folder", "")),
+                "receipt_folder": self.core.translate_path(saved.get("receipt_folder", "")),
+                "conflict_action": saved.get("conflict_action", "overwrite"),
+                "post_action": saved.get("post_action", "leave"),
+                "auto_extract": saved.get("auto_extract", True)
+            }
+        else:
+            translated_saved = {"target_folder": "", "target_zip_folder": "", "receipt_folder": "", "conflict_action": "overwrite", "post_action": "leave", "auto_extract": True}
+
+        unsaved = (cur != translated_saved)
         self.btn_save_config.config(style="Accent.TButton" if unsaved else "TButton", text="💾 Save *" if unsaved else "💾 Save")
         self.refresh_btn_text(self.btn_save_config)
 
@@ -1625,14 +1797,14 @@ If a folder lacks a valid `permitId`, use **Pattern Match** to route by filename
         try:
             if pattern:
                 self.core.save_pattern(pattern, config_data)
-                messagebox.showinfo("Success", f"Pattern Rule '{pattern}' saved.")
+                messagebox.showinfo("Success", f"Pattern Rule '{pattern}' saved.", parent=self.root)
             else:
                 permit_id = cd.get('permitId', 'DEFAULT')
                 self.core.save_config(permit_id, config_data)
-                messagebox.showinfo("Success", f"Config Rule for '{permit_id}' saved.")
+                messagebox.showinfo("Success", f"Config Rule for '{permit_id}' saved.", parent=self.root)
             self.check_unsaved_changes()
         except Exception as e:
-            messagebox.showerror("Error", f"Failed to save rule: {e}")
+            messagebox.showerror("Error", f"Failed to save rule: {e}", parent=self.root)
 
     def delete_selected_rule(self):
         ap = self.active_pattern_var.get().strip()
@@ -1642,12 +1814,12 @@ If a folder lacks a valid `permitId`, use **Pattern Match** to route by filename
     def delete_current_config(self):
         if self.current_index < 0: return
         pid = self.folders_data[self.current_index]['permitId']
-        if pid and pid != "DEFAULT" and messagebox.askyesno("Delete", f"Delete rule for {pid}?"):
+        if pid and pid != "DEFAULT" and messagebox.askyesno("Delete", f"Delete rule for {pid}?", parent=self.root):
             self.core.delete_config(pid); self.update_display()
 
     def delete_current_pattern(self):
         ap = self.active_pattern_var.get().strip()
-        if ap and messagebox.askyesno("Delete", f"Delete pattern {ap}?"):
+        if ap and messagebox.askyesno("Delete", f"Delete pattern {ap}?", parent=self.root):
             self.core.delete_pattern(ap); self.active_pattern_var.set(""); self.update_display()
 
     def delete_current_folder(self):
@@ -1659,9 +1831,9 @@ If a folder lacks a valid `permitId`, use **Pattern Match** to route by filename
             def worker():
                 try:
                     shutil.rmtree(cd['folder_path'])
-                    self.root.after(0, lambda: [popup.destroy(), self.on_search_folder_changed(), self.root.focus_force()])
+                    self.root.after(0, lambda: [popup.destroy(), self.on_search_folder_changed(maintain_selection=True), self.root.focus_force()])
                 except Exception as e:
-                    self.root.after(0, lambda: [popup.destroy(), messagebox.showerror("Error", str(e)), self.root.focus_force()])
+                    self.root.after(0, lambda: [popup.destroy(), messagebox.showerror("Error", str(e), parent=self.root), self.root.focus_force()])
             threading.Thread(target=worker, daemon=True).start()
 
     def open_current_folder(self):
@@ -1694,10 +1866,15 @@ If a folder lacks a valid `permitId`, use **Pattern Match** to route by filename
             if d.winfo_exists(): b.config(text=f"► {t} ◄" if d.focus_get()==b else t)
         bc = ttk.Button(bf, text="Cancel", command=lambda: set_r(False)); bc.pack(side=tk.LEFT, expand=True, padx=5)
         bd = ttk.Button(bf, text="Delete", style="Delete.TButton", command=lambda: set_r(True)); bd.pack(side=tk.LEFT, expand=True, padx=5)
+        
         bc.bind('<Return>', lambda e: bc.invoke())
         bd.bind('<Return>', lambda e: bd.invoke())
         bc.bind('<FocusIn>', lambda e: up(bc, "Cancel")); bc.bind('<FocusOut>', lambda e: up(bc, "Cancel"))
         bd.bind('<FocusIn>', lambda e: up(bd, "Delete")); bd.bind('<FocusOut>', lambda e: up(bd, "Delete"))
+        
+        # New: Arrow key navigation for modal buttons
+        d.bind('<Left>', lambda e: bc.focus_set())
+        d.bind('<Right>', lambda e: bd.focus_set())
         
         d.lift()
         d.focus_force()
@@ -1712,18 +1889,54 @@ If a folder lacks a valid `permitId`, use **Pattern Match** to route by filename
         return res[0]
 
     def open_manage_configs(self):
+        # Initial refresh
+        self.core.reload_cache()
+        
         bg_col = "#1e1e1e" if self.is_dark_mode else "#f0f2f5"
-        card_col = "#1e1e1e" if self.is_dark_mode else "#ffffff"
         fg_col = "#e0e0e0" if self.is_dark_mode else "#212121"
         list_bg = "#2c2c2c" if self.is_dark_mode else "#ffffff"
+        
         w = tk.Toplevel(self.root)
         w.title("Manage Rules")
-        w.geometry("1010x650")
+        w.geometry("1050x750")
         w.configure(bg=bg_col)
         w.attributes("-topmost", True)
         w.transient(self.root)
         w.grab_set()
         
+        # Header Area with Switcher
+        header_area = ttk.Frame(w, padding=(15, 15, 15, 0), style="Card.TFrame")
+        header_area.pack(fill=tk.X)
+        
+        ttk.Label(header_area, text="Editing Rules Workspace:", font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        
+        pop_ws_var = tk.StringVar(value=self.workspace_mode_var.get())
+        
+        def on_popup_ws_switch():
+            new_mode = pop_ws_var.get()
+            # Sync main UI variable (triggers apply_workspace)
+            self.workspace_mode_var.set(new_mode)
+            # update path label in popup
+            update_popup_path_label()
+            refresh_lists()
+
+        # Workspace Toggle inside popup
+        rb_p = ttk.Radiobutton(header_area, text="Personal (Local)", variable=pop_ws_var, value="local", command=on_popup_ws_switch, style="Card.TRadiobutton")
+        rb_p.pack(side=tk.LEFT, padx=(15, 10))
+        rb_t = ttk.Radiobutton(header_area, text="Team Shared", variable=pop_ws_var, value="global", command=on_popup_ws_switch, style="Card.TRadiobutton")
+        rb_t.pack(side=tk.LEFT, padx=10)
+        
+        lbl_path = ttk.Label(header_area, text="", style="CardDim.TLabel")
+        lbl_path.pack(side=tk.RIGHT)
+        
+        def update_popup_path_label():
+            if pop_ws_var.get() == "global":
+                lbl_path.config(text=f"Location: {self.core.global_dir}")
+            else:
+                lbl_path.config(text="Location: Local Application Data")
+        
+        update_popup_path_label()
+
         mp = ttk.PanedWindow(w, orient=tk.HORIZONTAL); mp.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
         lf = ttk.Frame(mp, style="Card.TFrame", padding=10); mp.add(lf, weight=1)
         ttk.Label(lf, text="Config IDs", style="Header.TLabel").pack(anchor=tk.W)
@@ -1734,26 +1947,54 @@ If a folder lacks a valid `permitId`, use **Pattern Match** to route by filename
         self.pattern_listbox = tk.Listbox(lf, font=("Segoe UI", self.base_font_size), bg=list_bg, fg=fg_col, selectbackground="#2563eb", activestyle="none", highlightthickness=0)
         self.pattern_listbox.pack(fill=tk.BOTH, expand=True)
         rf = ttk.Frame(mp, style="Card.TFrame", padding=20); mp.add(rf, weight=3)
+        
         mid, mt, mz, mr, mc, mpv, ma = tk.StringVar(), tk.StringVar(), tk.StringVar(), tk.StringVar(), tk.StringVar(value="Overwrite existing file"), tk.StringVar(value="Leave files in place"), tk.BooleanVar(value=True)
         at = tk.StringVar(value="config")
+        
         def make_r(p, l, v, d=True):
             r = ttk.Frame(p, style="Card.TFrame"); r.pack(fill=tk.X, pady=5)
             lbl = ttk.Label(r, text=l, width=20, style="Card.TLabel"); lbl.pack(side=tk.LEFT)
             tk.Entry(r, textvariable=v, bg=list_bg, fg=fg_col, insertbackground=fg_col, borderwidth=1).pack(side=tk.LEFT, fill=tk.X, expand=True, padx=(0, 5))
-            if d: ttk.Button(r, text="Browse", command=lambda: v.set(filedialog.askdirectory() or v.get())).pack(side=tk.LEFT)
+            if d: 
+                def rule_browse():
+                    folder = filedialog.askdirectory(parent=w)
+                    if folder: v.set(folder)
+                ttk.Button(r, text="Browse", command=rule_browse).pack(side=tk.LEFT)
             return lbl
+
         ilbl = make_r(rf, "ID / Pattern:", mid, False)
         make_r(rf, "Target:", mt); make_r(rf, "Processed:", mz); make_r(rf, "Receipt:", mr)
-        refresh_lists = lambda: [self.config_listbox.delete(0, tk.END), [self.config_listbox.insert(tk.END, p) for p in sorted(self.core.get_all_configs().keys())], self.pattern_listbox.delete(0, tk.END), [self.pattern_listbox.insert(tk.END, p) for p in sorted(self.core.load_patterns().keys())]]
+        
+        def refresh_lists():
+            self.config_listbox.delete(0, tk.END)
+            for p in sorted(self.core.get_all_configs().keys()):
+                self.config_listbox.insert(tk.END, p)
+            self.pattern_listbox.delete(0, tk.END)
+            for p in sorted(self.core.load_patterns().keys()):
+                self.pattern_listbox.insert(tk.END, p)
+            # Clear entries
+            mid.set(""); mt.set(""); mz.set(""); mr.set("")
+
         def load_sel(e, mode):
-            at.set(mode); ilbl.config(text="Config ID:" if mode=="config" else "Pattern:")
+            at.set(mode)
+            ilbl.config(text="Config ID:" if mode=="config" else "Pattern:")
             lb = self.config_listbox if mode=="config" else self.pattern_listbox
             if not lb.curselection(): return
             (self.pattern_listbox if mode=="config" else self.config_listbox).selection_clear(0, tk.END)
-            p = lb.get(lb.curselection()[0]); c = (self.core.get_all_configs() if mode=="config" else self.core.load_patterns()).get(p, {})
-            mid.set(p); mt.set(c.get('target_folder','')); mz.set(c.get('target_zip_folder','')); mr.set(c.get('receipt_folder',''))
+            p = lb.get(lb.curselection()[0])
+            c = (self.core.get_all_configs() if mode=="config" else self.core.load_patterns()).get(p, {})
+            mid.set(p)
+            mt.set(self.core.translate_path(c.get('target_folder','')))
+            mz.set(self.core.translate_path(c.get('target_zip_folder','')))
+            mr.set(self.core.translate_path(c.get('receipt_folder','')))
+            
         self.config_listbox.bind('<<ListboxSelect>>', lambda e: load_sel(e, "config"))
         self.pattern_listbox.bind('<<ListboxSelect>>', lambda e: load_sel(e, "pattern"))
+        
+        # Footer Action Bar
+        footer = ttk.Frame(w, padding=(15, 0, 15, 15), style="Card.TFrame")
+        footer.pack(fill=tk.X, side=tk.BOTTOM)
+        
         def sv():
             p = mid.get().strip()
             if not p: return
@@ -1761,11 +2002,14 @@ If a folder lacks a valid `permitId`, use **Pattern Match** to route by filename
             if at.get()=="config": self.core.save_config(p, c)
             else: self.core.save_pattern(p, c)
             refresh_lists()
-        btn_save = ttk.Button(rf, text="Save", command=sv); btn_save.pack(side=tk.BOTTOM, anchor=tk.E)
-        btn_save.bind('<Return>', lambda e: btn_save.invoke())
+
+        btn_close = ttk.Button(footer, text="Close", command=w.destroy, width=15)
+        btn_close.pack(side=tk.RIGHT, padx=5)
         
-        w.lift()
-        w.focus_force()
+        btn_save = ttk.Button(footer, text="Save Rule", command=sv, width=15, style="Accent.TButton")
+        btn_save.pack(side=tk.RIGHT, padx=5)
+        
+        w.bind('<Escape>', lambda e: w.destroy())
         refresh_lists()
         self.root.wait_window(w)
         self.root.focus_force()
@@ -1794,14 +2038,14 @@ If a folder lacks a valid `permitId`, use **Pattern Match** to route by filename
                 )
                 self.root.after(0, lambda: [popup.destroy(), self.on_process_success(), self.root.focus_force()])
             except Exception as e:
-                self.root.after(0, lambda: [popup.destroy(), messagebox.showerror("Error", str(e)), self.btn_process.config(text="Process", state=tk.NORMAL), self.root.focus_force()])
+                self.root.after(0, lambda: [popup.destroy(), messagebox.showerror("Error", str(e), parent=self.root), self.btn_process.config(text="Process", state=tk.NORMAL), self.root.focus_force()])
         
         threading.Thread(target=worker, daemon=True).start()
 
     def on_process_success(self):
-        messagebox.showinfo("Done", "Success!")
+        messagebox.showinfo("Done", "Success!", parent=self.root)
         self.btn_process.config(text="Process")
-        self.on_search_folder_changed()
+        self.on_search_folder_changed(maintain_selection=True)
         self.root.focus_force()
 
     def focus_btn(self, b):
@@ -1820,6 +2064,7 @@ If a folder lacks a valid `permitId`, use **Pattern Match** to route by filename
         elif b == self.btn_open_folder: base = "📂 Open"
         elif b == self.btn_save_config: base = "💾 Save *" if "*" in bt else "💾 Save"
         elif b == self.btn_manage_configs: base = "⚙ Manage"
+        elif b == self.btn_open_local_log: base = "📄 View Log"
         else: base = bt
         if (self.root.focus_get() == b): b.config(text=f"► {base} ◄")
         else: b.config(text=base)
@@ -1828,13 +2073,18 @@ def run_cli():
     p = argparse.ArgumentParser(description="CLI")
     p.add_argument('-s', '--search-folders', nargs='+', required=True)
     p.add_argument('-t', '--target-folder', required=True)
-    args = p.parse_args(); c = InboxMoverCore(); f = c.find_transfer_folders(args.search_folders)
+    args = p.parse_args()
+    c = InboxMoverCore()
+    
+    translated_search = [c.translate_path(s) for s in args.search_folders]
+    f = c.find_transfer_folders(translated_search)
+    
     for d in f:
-        cfg = {"target_folder": args.target_folder, "conflict_action": "overwrite", "post_action": "leave", "auto_extract": True}
+        cfg = {"target_folder": c.translate_path(args.target_folder), "conflict_action": "overwrite", "post_action": "leave", "auto_extract": True}
         c.process_zip(d, cfg)
 
 def main():
-    if len(sys.argv) > 1: run_cli()
+    if len(sys.platform) > 0 and len(sys.argv) > 1: run_cli()
     else:
         root = tk.Tk(); app = InboxMoverGUI(root)
         root.lift(); root.attributes('-topmost', True); root.after_idle(root.attributes, '-topmost', False)
