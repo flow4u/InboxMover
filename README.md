@@ -1,4 +1,4 @@
-# **Inbox Mover (v0.11)**
+# **Inbox Mover (v0.14.8)**
 
 **Inbox Mover** is a cross-platform utility designed to process files in the **transfer-** folders found in **i:** and **z:\\inbox** on [**myDRE**](https://mydre.org)**.** 
 
@@ -21,37 +21,28 @@ An alpha version of **inbox\_mover\_plugin.py** and **inbox\_mover\_plugin.R** i
 
 These plugins act as a lightweight utility to process, extract, and log ZIP files (and standard files) from a specific source folder. They are highly flexible and can be used as a standalone script or seamlessly integrated directly into your own Python and R codebase for automated data pipelines.
 
-## **🛠️ Prerequisites**
+## **🛠️ Installation**
 
 To run Inbox Mover, you need **Python 3** installed on your system. The application uses Python's built-in libraries, including tkinter for the GUI, meaning no external packages (via pip) are required.
 
-### **Installing Python and Tkinter**
+### **Windows**
 
 #### **On Windows (1)** -- no python needed, but you must be able to download an **exe**
 
 * See [**inbox_mover.exe**](https://github.com/flow4u/InboxMover/releases/tag/windows)
 
+
 #### **On Windows (2)**
 
+##### Prerequisit
 1. Go to the official Python website: [python.org/downloads](https://www.python.org/downloads/)  
 2. Download the latest Python 3 installer for Windows.  
 3. Run the installer.  
 4. **⚠️ CRITICAL STEP:** At the bottom of the installer window, ensure you check the box that says **"Add Python to PATH"** before clicking "Install Now".  
 5. *Note: Tkinter is included by default with standard Windows Python installations.*
 
-#### **On Linux (Ubuntu/Debian-based)**
 
-Most Linux distributions come with Python pre-installed, but tkinter often needs to be installed separately. Open your terminal and run:
-
-sudo apt update  
-sudo apt install python3 python3-tk
-
-## **🚀 Installation & Setup**
-
-Because Inbox Mover is a standalone script, "installing" it just means placing it somewhere convenient and setting up a shortcut.
-
-### **Windows Setup**
-
+#### Installation
 1. Download [**inbox\_mover.py**](https://github.com/flow4u/InboxMover/blob/main/inbox_mover.py).  
 2. Move the inbox\_mover.py file to C:\\helper\\ *(You may need to create the "helper" folder on your C: drive if it doesn't exist yet)*.  
 3. Right-click on inbox\_mover.py and select **"Create shortcut"**.  
@@ -59,7 +50,18 @@ Because Inbox Mover is a standalone script, "installing" it just means placing i
 5. In the Properties window, locate the **"Run"** dropdown menu, change it to **"Minimized"**, and click **OK**. *(This ensures the background command prompt stays out of your way when launching the app).*  
 6. Finally, move this customized shortcut to C:\\Users\\Public\\Desktop\\. This makes the application easily accessible on the desktop for every user account on the computer\!
 
-### **Linux Setup**
+
+
+#### **On Linux**
+
+##### Prerequisit
+Most Linux distributions come with Python pre-installed, but tkinter often needs to be installed separately. Open your terminal and run:
+
+* sudo apt update  
+* sudo apt install python3 python3-tk
+
+
+##### Installation
 
 1. Download [**inbox\_mover.py**](https://github.com/flow4u/InboxMover/blob/main/inbox_mover.py).
 2. You can place it in your \~/Desktop directory or in a shared location like /opt/InboxMover if multiple users need access.
@@ -100,6 +102,7 @@ In the sidebar, choose your workspace mode:
 
 The sidebar shows all detected transfer- folders:
 * **✓**: Folder is valid and ready to process.
+* **✓L**: Folder is valid, is ready to process, but was processed already.
 * **✗**: Folder appears empty or invalid.
 
 Use Up/Down or Left/Right arrows to cycle through the queue.
