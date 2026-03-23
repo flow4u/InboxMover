@@ -28,7 +28,7 @@ Whenever a folder is processed, a hidden log is created inside it. If you select
 
 *Latest: 2026-03-15 12:24:04 | User: stefan.vanaalst | Config: PROJECT_X*
 
-You can click the **📄 View Log** button next to the folder name to see exactly what they did.
+You can click the **📄 View Log** button next to the folder name to see exactly what they did. In the folder tree all processed folders that are not moved nor deleted are marked with **L** for log. Top right you can easily view the log.
 
 
 ### **4\. I get different types of files. How do I make sure they go to the right place without me having to choose a folder every single time?**
