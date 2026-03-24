@@ -105,7 +105,7 @@ In the sidebar, choose your workspace mode:
 
 The sidebar shows all detected transfer- folders:
 * **✓**: Folder is valid and ready to process.
-* **✓ (L)**: Folder is valid, is ready to process, but was processed already.
+* **✓ (L)**: Folder is valid, is ready to process, but was processed already and a Log is available.
 * **✗**: Folder appears empty or invalid.
 
 Use Up/Down or Left/Right arrows to cycle through the queue.
