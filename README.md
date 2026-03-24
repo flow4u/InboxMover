@@ -56,12 +56,12 @@ To run Inbox Mover, you need **Python 3** installed on your system. The applicat
 #### **On Linux**
 
 ##### Prerequisit
-**AllowList**: archive.ubuntu.com
+1. **AllowList**: archive.ubuntu.com
 
 Most Linux distributions come with Python pre-installed, but tkinter often needs to be installed separately. Open your terminal and run:
 
-* sudo apt update  
-* sudo apt install python3 python3-tk
+2. sudo apt update  
+3. sudo apt install python3 python3-tk
 
 
 ##### Installation
