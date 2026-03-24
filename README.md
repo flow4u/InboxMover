@@ -1,4 +1,4 @@
-# **Inbox Mover (v0.14.8)**
+# **Inbox Mover (v0.16.5)**
 
 **Inbox Mover** is a cross-platform utility designed to process files in the **transfer-** folders found in **i:** and **z:\\inbox** on [**myDRE**](https://mydre.org)**.** 
 
@@ -127,8 +127,11 @@ The main area shows a combined view of all files in the source folder followed b
 
 * **Manageg Rules**: Here the pattern matching rules and config rules can be managed. See ? in the application for examples
 
+### **6\. CREATE <RECEIPT.JSON> FILES**
 
-### **6\. Advanced Logging & Overrides**
+Easy create your own custom receipt.json file based on your settings that work both on Windows and Linux VMs. Just add the receipt*.json to your uploads!
+
+### **7\. Advanced Logging & Overrides**
 
 * **Auto-Extract Checkbox:** By default, ZIP files are extracted. If you simply want to move/copy the .zip archive itself into your Target Folder, uncheck the "Auto-Extract ZIP files" box.  
 * **Global Audit Logging:** Every processed file and resolved conflict is written to a machine-readable JSONL file (process\_log.jsonl). Click **'📄 View Log'** to inspect it.  
