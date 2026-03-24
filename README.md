@@ -35,11 +35,12 @@ To run Inbox Mover, you need **Python 3** installed on your system. The applicat
 #### **On Windows (2)**
 
 ##### Prerequisit
-1. Go to the official Python website: [python.org/downloads](https://www.python.org/downloads/)  
-2. Download the latest Python 3 installer for Windows.  
-3. Run the installer.  
-4. **⚠️ CRITICAL STEP:** At the bottom of the installer window, ensure you check the box that says **"Add Python to PATH"** before clicking "Install Now".  
-5. *Note: Tkinter is included by default with standard Windows Python installations.*
+1. **AllowList**: python.org, pypi.org, pythonhosted.org
+2. Go to the official Python website: [python.org/downloads](https://www.python.org/downloads/)  
+3. Download the latest Python 3 installer for Windows.  
+4. Run the installer.  
+5. **⚠️ CRITICAL STEP:** At the bottom of the installer window, ensure you check the box that says **"Add Python to PATH"** before clicking "Install Now".  
+6. *Note: Tkinter is included by default with standard Windows Python installations.*
 
 
 #### Installation
@@ -55,6 +56,8 @@ To run Inbox Mover, you need **Python 3** installed on your system. The applicat
 #### **On Linux**
 
 ##### Prerequisit
+**AllowList**: archive.ubuntu.com
+
 Most Linux distributions come with Python pre-installed, but tkinter often needs to be installed separately. Open your terminal and run:
 
 * sudo apt update  
