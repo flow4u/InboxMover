@@ -40,12 +40,16 @@ Inbox Mover remembers your preferences so you only have to "teach" it once. It u
 * **Scenario B**: By **Pattern Matching** of Filenames: If there is no ID, you can use the Pattern Match field. Enter a wildcard like **survey_*.dwg**. Next time a folder arrives containing a file that matches that pattern, Inbox Mover will recognize it and apply your routing rules automatically.
 
 
-### **5\. Most of my data arrives in ZIP files. Do I still have to right-click and "Extract All" manually?**
+### **5\. Did you know you can add a receipt.json to your upload?**
+
+In Inbox Mover you can create a receipt.json that can be added to the files upload. Download it locally and add it to the files that are uploaded. A nice feature especially when dealing with multiple workspaces, the receipt.json rules them all; destinations, post-processing, and what to do with zips!
+
+### **6\. Most of my data arrives in ZIP files. Do I still have to right-click and "Extract All" manually?**
 
 **Not anymore.** Inbox Mover has an **Auto-Extract ZIP files** checkbox. If you leave this checked, the tool will automatically open the ZIP file and pull all the actual files out into your Target Folder. If you actually *want* to keep the ZIP file closed and just move the .zip file itself, simply uncheck the box\!
 In case of encrypted zips, a password input will pop up.
 
-### **6\. What happens if I move a file, but a file with that exact name already exists in my Target Folder? Will I lose my data?**
+### **7\. What happens if I move a file, but a file with that exact name already exists in my Target Folder? Will I lose my data?**
 
 Inbox Mover has built-in safety nets called **Conflict Resolution**. You can choose exactly how it behaves before you click process:
 
@@ -53,7 +57,7 @@ Inbox Mover has built-in safety nets called **Conflict Resolution**. You can cho
 * **Rename existing file:** It will rename your *old* file with a timestamp (so you know it's an older version), and put the new file in its place.  
 * **Overwrite:** It will simply replace the old file with the new one.
 
-### **7\. After I move the files, my inbox is still cluttered with empty transfer- folders. Can the tool clean this up?**
+### **8\. After I move the files, my inbox is still cluttered with empty transfer- folders. Can the tool clean this up?**
 **Yes**. Use the FOLDER section's Post Action setting:
 
 * **Leave**: Do nothing (folders stay in the inbox).
@@ -64,7 +68,7 @@ Inbox Mover has built-in safety nets called **Conflict Resolution**. You can cho
 Just in case, InBox Mover also allows you to manually delete folders.
 
 
-### **8\. Can I control where my files go *before* I even upload them?**
+### **9\. Can I control where my files go *before* I even upload them?**
 
 **Yes\! You can dictate exactly what Inbox Mover does by including your own receipt.json file in your upload.**
 
