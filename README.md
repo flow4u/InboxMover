@@ -8,6 +8,8 @@ See also [**Inbox Mover FAQ**](https://github.com/flow4u/InboxMover/blob/main/In
 
 ![Inbox Mover Screenshot](https://github.com/flow4u/InboxMover/blob/main/Inbox_Mover.png)
 
+*An expermimental TUI, Terminal User Interface, [inbox_mover_tui.py](https://github.com/flow4u/InboxMover/blob/main/inbox_mover_tui.py) is also available. Should work without any additional installation on Linux (both RDP and SSH), on Windows it requires pip install windows-curses.*
+
 
 ## **📜 Open Source & Customization**
 
@@ -30,9 +32,6 @@ To run Inbox Mover, you need **Python 3** installed on your system. The applicat
 #### **On Windows (1)** -- no python needed, but you must be able to download an **exe**
 
 * See [**inbox_mover.exe**](https://github.com/flow4u/InboxMover/releases/tag/windows)
-
-
-*An expermimental TUI, Terminal User Interface, [inbox_mover_tui.py](https://github.com/flow4u/InboxMover/blob/main/inbox_mover_tui.py) is also available. Should work without any additional installation on Linux (both RDP and SSH), on Windows it requires pip install windows-curses.*
 
 
 #### **On Windows (2)**
