@@ -930,7 +930,7 @@ class InboxMoverGUI:
         ttk.Label(q_header, text="PENDING QUEUE", style="SectionHeader.TLabel").pack(side=tk.LEFT)
         self.lbl_nav_count = ttk.Label(q_header, textvariable=self.nav_count_var, style="CardDim.TLabel")
         self.lbl_nav_count.pack(side=tk.LEFT, padx=10)
-        self.btn_refresh = ttk.Button(q_header, text="↻ Scan", command=self.on_search_folder_changed, takefocus=0)
+        self.btn_refresh = ttk.Button(q_header, text="↻ Refresh", command=lambda: self.on_search_folder_changed(is_manual_refresh=True), takefocus=0)
         self.btn_refresh.pack(side=tk.RIGHT)
 
         list_frame = ttk.Frame(self.left_panel, style="Card.TFrame")
@@ -1128,6 +1128,51 @@ class InboxMoverGUI:
         d.focus_force()
         self.root.update()
         return d, lbl_msg
+
+    def show_no_new_folders_popup(self):
+        bg_col = "#333333" if self.is_dark_mode else "#323232"
+        fg_col = "#ffffff"
+        
+        popup = tk.Toplevel(self.root)
+        popup.overrideredirect(True)
+        popup.attributes("-topmost", True)
+        
+        w, h = 350, 60
+        bx = self.btn_refresh.winfo_rootx()
+        by = self.btn_refresh.winfo_rooty()
+        bw = self.btn_refresh.winfo_width()
+        
+        x = bx + (bw // 2) - (w // 2)
+        y = by - h - 10
+        
+        popup.geometry(f"{w}x{h}+{x}+{y}")
+        popup.configure(bg=bg_col)
+        
+        frame = tk.Frame(popup, bg=bg_col, highlightbackground="#555555", highlightthickness=1)
+        frame.pack(fill=tk.BOTH, expand=True)
+        
+        font_family = "Segoe UI" if sys.platform == "win32" else "Helvetica"
+        lbl = tk.Label(frame, text="No new TRANSFER-folders have been found.", 
+                       bg=bg_col, fg=fg_col, font=(font_family, 10), pady=10)
+        lbl.pack(expand=True, fill=tk.BOTH)
+        
+        def dismiss(e=None):
+            if popup.winfo_exists():
+                popup.destroy()
+                
+        popup.bind("<Button-1>", dismiss)
+        lbl.bind("<Button-1>", dismiss)
+        frame.bind("<Button-1>", dismiss)
+        
+        self.root.after(3500, dismiss)
+
+    def animate_refresh_button(self, frame=0):
+        if not getattr(self, '_anim_running', False):
+            return
+        frames = ["Refreshing.", "Refreshing..", "Refreshing..."]
+        if self.btn_refresh.winfo_exists():
+            self.btn_refresh.config(text=f"↻ {frames[frame % len(frames)]}")
+            self.root.after(400, self.animate_refresh_button, frame + 1)
 
     def show_welcome_splash(self):
         self.root.update()
@@ -1630,46 +1675,77 @@ Audit trails stored in workspace (`process_log.jsonl`) and individual folders (`
                 if not os.path.exists(d): shutil.copy2(os.path.join(ldir, f), d)
             self.core.reload_cache()
 
-    def on_search_folder_changed(self, startup=False, maintain_selection=False):
+    def on_search_folder_changed(self, startup=False, maintain_selection=False, is_manual_refresh=False):
         f1, f2 = self.search_folder_1_var.get(), self.search_folder_2_var.get()
         s = []
         if f1 and os.path.isdir(f1): s.append(f1)
         if f2 and os.path.isdir(f2): s.append(f2)
         
         old_idx = self.current_index
+        old_paths = {d['folder_path'] for d in getattr(self, 'folders_data', [])}
 
-        if s:
-            self.folders_data = self.core.find_transfer_folders(s)
+        if is_manual_refresh:
+            self._anim_running = True
+            self.btn_refresh.config(state=tk.DISABLED)
+            self.animate_refresh_button()
+
+        def worker():
+            if s:
+                new_data = self.core.find_transfer_folders(s)
+            else:
+                new_data = []
+            self.root.after(0, finish_update, new_data)
+
+        def finish_update(new_data):
+            if is_manual_refresh:
+                self._anim_running = False
+                if self.btn_refresh.winfo_exists():
+                    self.btn_refresh.config(state=tk.NORMAL, text="↻ Refresh")
+                    
+            self.folders_data = new_data
             self.queue_listbox.delete(0, tk.END)
-            for d in self.folders_data: 
-                status_icon = "✓ " if d['can_process'] else "✗ "
-                log_icon = "(L) " if d.get('has_log') else ""
-                self.queue_listbox.insert(tk.END, status_icon + log_icon + d['folder_name'])
-                
-                if not d['can_process']:
-                    self.queue_listbox.itemconfig(tk.END, foreground='#ef4444')
+            if s:
+                for d in self.folders_data: 
+                    status_icon = "✓ " if d['can_process'] else "✗ "
+                    log_icon = "(L) " if d.get('has_log') else ""
+                    self.queue_listbox.insert(tk.END, status_icon + log_icon + d['folder_name'])
+                    
+                    if not d['can_process']:
+                        self.queue_listbox.itemconfig(tk.END, foreground='#ef4444')
             
-            if self.folders_data:
-                if maintain_selection and old_idx >= 0:
-                    self.current_index = max(0, min(old_idx, len(self.folders_data) - 1))
+                if self.folders_data:
+                    if maintain_selection and old_idx >= 0:
+                        self.current_index = max(0, min(old_idx, len(self.folders_data) - 1))
+                    else:
+                        self.current_index = 0
+                    
+                    self.queue_listbox.selection_set(self.current_index)
+                    self.nav_count_var.set(f"{len(self.folders_data)} Folders")
+                    self.update_display()
                 else:
-                    self.current_index = 0
-                
-                self.queue_listbox.selection_set(self.current_index)
-                self.nav_count_var.set(f"{len(self.folders_data)} Folders")
-                self.update_display()
+                    self.current_index = -1
+                    self.nav_count_var.set("0 Folders")
+                    self.clear_zip_display()
             else:
                 self.current_index = -1
                 self.nav_count_var.set("0 Folders")
                 self.clear_zip_display()
+            
+            self.root.focus_force()
+            
+            if is_manual_refresh:
+                new_paths = {d['folder_path'] for d in self.folders_data}
+                if not (new_paths - old_paths):
+                    self.show_no_new_folders_popup()
+
+        if is_manual_refresh:
+            threading.Thread(target=worker, daemon=True).start()
         else:
-            self.folders_data = []
-            self.current_index = -1
-            self.queue_listbox.delete(0, tk.END)
-            self.nav_count_var.set("0 Folders")
-            self.clear_zip_display()
-        
-        self.root.focus_force()
+            if s:
+                new_data = self.core.find_transfer_folders(s)
+            else:
+                new_data = []
+            finish_update(new_data)
 
     def on_queue_select(self, event):
         sel = self.queue_listbox.curselection()
