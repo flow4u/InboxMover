@@ -108,7 +108,7 @@ class InboxMoverCore:
     def load_app_settings(self):
         settings_path = os.path.join(self.local_config_dir, "app_settings.json")
         if sys.platform == "win32": def_sf1, def_sf2 = "i:\\", "z:\\inbox"
-        else: def_sf1, def_sf2 = "/mnt/inbox/", "/mnt/data/"
+        else: def_sf1, def_sf2 = "/mnt/inbox/", "/mnt/data/inbox"
         settings = {"search_folder_1": def_sf1, "search_folder_2": def_sf2, "use_global": False, "global_dir": ""}
         if os.path.exists(settings_path):
             try:
