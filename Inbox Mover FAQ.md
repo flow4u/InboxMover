@@ -67,6 +67,9 @@ Inbox Mover has built-in safety nets called **Conflict Resolution**. You can cho
 * **Move**: Sweep the folder into a "Processed" or "Archive" directory of your choice.
 Just in case, InBox Mover also allows you to manually delete folders.
 
+### **8b\. Can I process multiple folders at the same time?**
+**Yes\!** In the pending queue, hold down **Ctrl** or **Shift** to select multiple folders. A **Batch Process** button will appear (or become active). Inbox Mover will process each selected folder sequentially from oldest to newest. If any folder encounters an error, you will be prompted on whether to continue with the remaining folders.
+
 
 ### **9\. Can I control where my files go *before* I even upload them?**
 
@@ -103,6 +106,8 @@ If Inbox Mover detects these settings in your file, it will instantly apply them
 Inbox Mover is designed for hands-on-keyboard speed:
 
 * **Arrows (Up/Down or Left/Right)**: Cycle through the pending queue.
+
+* **Ctrl/Shift+Click**: Select multiple folders for Batch Process.
 
 * **Tab**: Cycle focus between Open, Delete, and Process Folders. **Tab** also works in the **Delete Folder** popup.
 

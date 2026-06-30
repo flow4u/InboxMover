@@ -1,4 +1,4 @@
-# **Inbox Mover (v0.17.4)**
+# **Inbox Mover (v0.18)**
 
 **Inbox Mover** is a cross-platform utility designed to process files in the **transfer-** folders found in **i:** and **z:\\inbox** on [**myDRE**](https://mydre.org)**.** 
 
@@ -84,6 +84,7 @@ Inbox Mover is optimized for speed with robust keyboard navigation:
 ⌨️ Keyboard Shortcuts
 
 * **Arrows (↑ ↓ ← →)**: Navigate the sidebar queue.
+* **Ctrl/Shift+Click**: Select multiple folders for Batch Process.
 * **Tab / Shift-Tab**: Cycle focus between Delete Folder, Save Rule, and PROCESS FOLDER.
 * **Enter**: Trigger the focused button (indicated by ► ◄ arrows).
 

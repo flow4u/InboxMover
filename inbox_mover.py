@@ -24,7 +24,7 @@ import webbrowser
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
 
-VERSION = "0.17.3"
+VERSION = "0.18"
 
 # --------------------------------------------------------------------------- #
 # HELPERS
@@ -936,7 +936,7 @@ class InboxMoverGUI:
         list_frame = ttk.Frame(self.left_panel, style="Card.TFrame")
         list_frame.pack(fill=tk.BOTH, expand=True)
         font_family = "Segoe UI" if sys.platform == "win32" else "Helvetica"
-        self.queue_listbox = tk.Listbox(list_frame, font=(font_family, self.base_font_size), selectbackground="#2563eb", activestyle="none", highlightthickness=0, borderwidth=0)
+        self.queue_listbox = tk.Listbox(list_frame, font=(font_family, self.base_font_size), selectmode=tk.EXTENDED, selectbackground="#2563eb", activestyle="none", highlightthickness=0, borderwidth=0)
         self.queue_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.queue_listbox.yview)
         self.queue_listbox.configure(yscrollcommand=scrollbar.set)
@@ -1075,9 +1075,12 @@ class InboxMoverGUI:
         
         self.btn_process = ttk.Button(folder_btns, text="Process", style="Process.TButton", command=self.process_current_zip)
         self.btn_process.pack(side=tk.LEFT, ipady=4, ipadx=10)
+        
+        self.btn_batch_process = ttk.Button(folder_btns, text="Batch Process", style="Process.TButton", command=self.batch_process_zips)
+        self.btn_batch_process.pack(side=tk.LEFT, ipady=4, ipadx=10)
 
         # Keyboard Loop
-        for btn in [self.btn_open_folder, self.btn_delete_folder, self.btn_process, self.btn_save_config, self.btn_manage_configs, self.btn_open_local_log, self.btn_create_receipt]:
+        for btn in [self.btn_open_folder, self.btn_delete_folder, self.btn_process, self.btn_batch_process, self.btn_save_config, self.btn_manage_configs, self.btn_open_local_log, self.btn_create_receipt]:
             btn.bind('<Return>', lambda e, b=btn: self.invoke_btn(b))
 
         self.btn_open_folder.bind('<FocusIn>', lambda e: self.refresh_btn_text(self.btn_open_folder))
@@ -1086,6 +1089,8 @@ class InboxMoverGUI:
         self.btn_delete_folder.bind('<FocusOut>', lambda e: self.refresh_btn_text(self.btn_delete_folder))
         self.btn_process.bind('<FocusIn>', lambda e: self.refresh_btn_text(self.btn_process))
         self.btn_process.bind('<FocusOut>', lambda e: self.refresh_btn_text(self.btn_process))
+        self.btn_batch_process.bind('<FocusIn>', lambda e: self.refresh_btn_text(self.btn_batch_process))
+        self.btn_batch_process.bind('<FocusOut>', lambda e: self.refresh_btn_text(self.btn_batch_process))
         self.btn_save_config.bind('<FocusIn>', lambda e: self.refresh_btn_text(self.btn_save_config))
         self.btn_save_config.bind('<FocusOut>', lambda e: self.refresh_btn_text(self.btn_save_config))
         self.btn_manage_configs.bind('<FocusIn>', lambda e: self.refresh_btn_text(self.btn_manage_configs))
@@ -1219,9 +1224,10 @@ class InboxMoverGUI:
                 lbl.pack(side=tk.LEFT, padx=3)
             ttk.Label(grid, text=desc, font=(font_family, self.base_font_size + 1)).grid(row=row, column=1, sticky=tk.W, pady=10)
 
-        add_shortcut(0, ["↑", "↓", "←", "→"], "Cycle through pending folders")
-        add_shortcut(1, ["Tab", "Shift+Tab"], "Switch focus between main action buttons (Open/Delete/Process)")
-        add_shortcut(2, ["Enter"], "Execute the highlighted action")
+        add_shortcut(0, ["↑", "↓"], "Cycle through pending folders")
+        add_shortcut(1, ["Ctrl+Click"], "Select multiple for Batch Process")
+        add_shortcut(2, ["Tab", "Shift+Tab"], "Switch focus between main action buttons")
+        add_shortcut(3, ["Enter"], "Execute the highlighted action")
 
         bottom_frame = ttk.Frame(main_frame, style="Card.TFrame")
         bottom_frame.pack(side=tk.BOTTOM, fill=tk.X, pady=(20, 0))
@@ -1635,6 +1641,7 @@ Audit trails stored in workspace (`process_log.jsonl`) and individual folders (`
 
     def bind_keys(self):
         self.root.bind("<Left>", self.prev_zip); self.root.bind("<Right>", self.next_zip); self.root.bind("<Up>", self.prev_zip); self.root.bind("<Down>", self.next_zip)
+        self.root.bind("<Escape>", self.clear_selection)
 
     def browse_global_dir(self):
         f = filedialog.askdirectory(title="Shared Settings Folder", parent=self.root)
@@ -1764,8 +1771,10 @@ Audit trails stored in workspace (`process_log.jsonl`) and individual folders (`
             return
         self.placeholder_frame.pack_forget()
         self.detail_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
-        self.queue_listbox.selection_clear(0, tk.END)
-        self.queue_listbox.selection_set(self.current_index)
+        sel = self.queue_listbox.curselection()
+        if self.current_index not in sel:
+            self.queue_listbox.selection_clear(0, tk.END)
+            self.queue_listbox.selection_set(self.current_index)
         self.queue_listbox.see(self.current_index)
         cd = self.folders_data[self.current_index]
         self.zip_name_var.set(cd['folder_name'])
@@ -1790,9 +1799,19 @@ Audit trails stored in workspace (`process_log.jsonl`) and individual folders (`
         self.active_pattern_var.set(""); self.auto_extract_var.set(True)
         
         self._apply_config_mapping(self.core.load_config("DEFAULT"))
+        
+        # Gather all filenames for pattern matching
+        all_filenames = list(cd['file_list'])
+        if cd.get('has_valid_zip') and cd.get('zip_path'):
+            try:
+                with zipfile.ZipFile(cd['zip_path'], 'r') as zf:
+                    all_filenames.extend(zf.namelist())
+            except Exception:
+                pass
+
         pattern_cfg_found = None
         for p, cfg in self.core.load_patterns().items():
-            if any(fnmatch.fnmatch(f, p) for f in cd['file_list']):
+            if any(fnmatch.fnmatch(f, p) for f in all_filenames):
                 pattern_cfg_found = (p, cfg)
                 break
         
@@ -1840,7 +1859,27 @@ Audit trails stored in workspace (`process_log.jsonl`) and individual folders (`
         self.conflict_display_var.set(self.conflict_reverse_map.get(self.conflict_action_var.get(), "Overwrite existing file"))
         self.post_display_var.set(self.post_reverse_map.get(self.post_action_var.get(), "Leave files in place"))
         
-        inspector_text = f"FILES:\n{'-'*20}\n" + "\n".join(sorted(cd['file_list'])) + "\n\nRECEIPT:\n" + (cd['receipt_raw'] or "None")
+        inspector_text = f"FILES:\n{'-'*20}\n" + "\n".join(sorted(cd['file_list']))
+        
+        if cd.get('has_valid_zip') and cd.get('zip_path'):
+            zip_path = cd['zip_path']
+            try:
+                with zipfile.ZipFile(zip_path, 'r') as zf:
+                    try:
+                        zip_contents = zf.namelist()
+                        is_encrypted = any(info.flag_bits & 0x1 for info in zf.infolist())
+                        
+                        inspector_text += f"\n\nZIP CONTENTS:\n{'-'*20}\n"
+                        if is_encrypted:
+                            inspector_text += "[WARNING: ZIP file is password protected]\n"
+                        inspector_text += "\n".join(zip_contents)
+                    except Exception as e:
+                        inspector_text += f"\n\n[WARNING: Error reading ZIP contents - {str(e)}]"
+            except Exception as e:
+                inspector_text += f"\n\n[WARNING: Could not open ZIP file - {str(e)}]"
+
+        inspector_text += "\n\nRECEIPT:\n" + (cd.get('receipt_raw') or "None")
+
         if receipt_warning:
             inspector_text = f"{receipt_warning}\n{'-'*80}\n" + inspector_text
             
@@ -1849,11 +1888,14 @@ Audit trails stored in workspace (`process_log.jsonl`) and individual folders (`
         self.check_unsaved_changes()
 
         if cd['can_process']:
-            self.btn_process.focus_set()
+            if len(self.queue_listbox.curselection()) > 1:
+                self.btn_batch_process.focus_set()
+            else:
+                self.btn_process.focus_set()
         else:
             self.btn_delete_folder.focus_set()
         
-        for btn in [self.btn_process, self.btn_delete_folder, self.btn_open_folder, self.btn_save_config, self.btn_manage_configs, self.btn_open_local_log]:
+        for btn in [self.btn_process, self.btn_batch_process, self.btn_delete_folder, self.btn_open_folder, self.btn_save_config, self.btn_manage_configs, self.btn_open_local_log]:
             self.refresh_btn_text(btn)
 
     def _apply_config_mapping(self, cfg):
@@ -1886,11 +1928,19 @@ Audit trails stored in workspace (`process_log.jsonl`) and individual folders (`
     def update_nav_buttons(self):
         has = len(self.folders_data) > 0
         cp = has and self.current_index >= 0 and self.folders_data[self.current_index]['can_process']
-        self.btn_process.config(state=tk.NORMAL if cp else tk.DISABLED)
+        
+        sel = self.queue_listbox.curselection()
+        if len(sel) > 1:
+            self.btn_process.config(state=tk.DISABLED, style="TButton")
+            self.btn_batch_process.config(state=tk.NORMAL if cp else tk.DISABLED, style="Process.TButton")
+        else:
+            self.btn_process.config(state=tk.NORMAL if cp else tk.DISABLED, style="Process.TButton")
+            self.btn_batch_process.config(state=tk.DISABLED, style="TButton")
+            
         self.btn_save_config.config(state=tk.NORMAL if cp else tk.DISABLED)
         self.btn_delete_folder.config(state=tk.NORMAL if has else tk.DISABLED)
         self.btn_open_folder.config(state=tk.NORMAL if has else tk.DISABLED)
-        for b in [self.btn_process, self.btn_save_config, self.btn_delete_folder, self.btn_open_folder, self.btn_manage_configs, self.btn_open_local_log]:
+        for b in [self.btn_process, self.btn_batch_process, self.btn_save_config, self.btn_delete_folder, self.btn_open_folder, self.btn_manage_configs, self.btn_open_local_log]:
             self.refresh_btn_text(b)
 
     def check_unsaved_changes(self, *args):
@@ -1918,11 +1968,22 @@ Audit trails stored in workspace (`process_log.jsonl`) and individual folders (`
 
     def prev_zip(self, e=None):
         if self.root.focus_get() != self.queue_listbox and self.current_index > 0:
+            if e and getattr(e, 'state', 0) & 0x0001:
+                self.queue_listbox.selection_set(self.current_index - 1)
             self.current_index -= 1; self.update_display()
 
     def next_zip(self, e=None):
         if self.root.focus_get() != self.queue_listbox and self.current_index < len(self.folders_data) - 1:
+            if e and getattr(e, 'state', 0) & 0x0001:
+                self.queue_listbox.selection_set(self.current_index + 1)
             self.current_index += 1; self.update_display()
+
+    def clear_selection(self, e=None):
+        if self.current_index >= 0:
+            self.queue_listbox.selection_clear(0, tk.END)
+            self.queue_listbox.selection_set(self.current_index)
+            self.update_nav_buttons()
+            self.update_display()
 
     def save_permit_config(self):
         if self.current_index < 0: return
@@ -2212,6 +2273,74 @@ Audit trails stored in workspace (`process_log.jsonl`) and individual folders (`
         
         threading.Thread(target=worker, daemon=True).start()
 
+    def batch_process_zips(self):
+        """Process multiple ZIP folders sequentially from oldest to newest."""
+        sel = self.queue_listbox.curselection()
+        if not sel: return
+        
+        # Sort descending (highest index first = oldest first)
+        indices = sorted(list(sel), reverse=True)
+        
+        if len(indices) == 1:
+            self.current_index = indices[0]
+            self.process_current_zip()
+            return
+            
+        popup, lbl_msg = self.show_status_popup("Batch Action in Progress", "Initializing batch...")
+        self.btn_process.config(state=tk.DISABLED)
+        self.btn_batch_process.config(state=tk.DISABLED, text="Processing...")
+        
+        def batch_worker():
+            for i, idx in enumerate(indices):
+                # Ensure the GUI updates to show the current folder
+                self.root.after(0, lambda current_idx=idx: [setattr(self, 'current_index', current_idx), self.update_display()])
+                
+                # Small delay to allow UI to update
+                import time
+                time.sleep(0.5)
+                
+                # Re-fetch config because we apply specific config per folder
+                c = {"target_folder": self.target_folder_var.get(), "target_zip_folder": self.target_zip_folder_var.get(), "receipt_folder": self.receipt_folder_var.get(), "conflict_action": self.conflict_action_var.get(), "post_action": self.post_action_var.get(), "auto_extract": self.auto_extract_var.get()}
+                
+                folder_name = self.folders_data[idx]['folder_name']
+
+                if not c['target_folder']:
+                    result = [False]
+                    event = threading.Event()
+                    def show_dialog_tf():
+                        result[0] = messagebox.askyesno("Batch Error", f"Folder: {folder_name}\nTarget folder is missing.\n\nContinue with next?", parent=self.root)
+                        event.set()
+                    self.root.after(0, show_dialog_tf)
+                    event.wait()
+                    if result[0]: continue
+                    else: break
+                
+                def update_status(current, total, filename):
+                    msg = f"Batch {i+1}/{len(indices)}\nProcessing {current}/{total} files...\nCurrently: {filename}"
+                    self.root.after(0, lambda: lbl_msg.config(text=msg))
+
+                try:
+                    self.core.process_zip(
+                        self.folders_data[idx], 
+                        c, 
+                        progress_callback=update_status,
+                        password_callback=lambda z: simpledialog.askstring("PWD", f"PWD for {z}:", show='*', parent=self.root)
+                    )
+                except Exception as e:
+                    result = [False]
+                    event = threading.Event()
+                    def show_dialog_err():
+                        result[0] = messagebox.askyesno("Batch Error", f"Error in folder: {folder_name}\n\n{str(e)}\n\nDo you want to continue with the remaining folders?", parent=self.root)
+                        event.set()
+                    self.root.after(0, show_dialog_err)
+                    event.wait()
+                    if not result[0]:
+                        break
+            
+            self.root.after(0, lambda: [popup.destroy(), self.on_process_success(), self.btn_batch_process.config(text="Batch Process", state=tk.NORMAL), self.root.focus_force()])
+            
+        threading.Thread(target=batch_worker, daemon=True).start()
+
     def on_process_success(self):
         messagebox.showinfo("Done", "Success!", parent=self.root)
         self.btn_process.config(text="Process")
@@ -2230,6 +2359,7 @@ Audit trails stored in workspace (`process_log.jsonl`) and individual folders (`
         if not hasattr(b, 'cget'): return
         bt = b.cget('text').replace('► ', '').replace(' ◄', '')
         if b == self.btn_process: base = "Process" if "Processing" not in bt else "Processing..."
+        elif b == self.btn_batch_process: base = "Batch Process" if "Processing" not in bt else "Processing..."
         elif b == self.btn_delete_folder: base = "🗑 Delete"
         elif b == self.btn_open_folder: base = "📂 Open"
         elif b == self.btn_save_config: base = "💾 Save *" if "*" in bt else "💾 Save"
