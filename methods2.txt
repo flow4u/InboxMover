@@ -1,0 +1,15 @@
+    def __init__(self):
+    def translate_path(self, path):
+    def set_workspace(self):
+    def reload_cache(self):
+    def ensure_config_dir(self):
+    def load_app_settings(self):
+    def save_app_settings(self, settings):
+    def find_transfer_folders(self, search_folders):
+    def inspect_transfer_folder(self, folder_path):
+    def inspect_zip(self, zip_path):
+    def save_config(self, permit_id, config_data):
+    def save_pattern(self, pattern, config_data):
+    def write_log(self, status, folder_data, config, actions, message=""):
+    def safe_copy(self, src, dst):
+    def process_zip(self, folder_data, config, progress_callback=None):

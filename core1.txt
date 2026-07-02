@@ -1,0 +1,707 @@
+class InboxMoverCore:
+    def __init__(self):
+        self.local_config_dir = "permit_configs"
+        if not os.path.exists(self.local_config_dir):
+            os.makedirs(self.local_config_dir, exist_ok=True)
+
+        # Caching layer for performance
+        self._config_cache = {}
+        self._patterns_cache = {}
+
+        settings = self.load_app_settings()
+        self.use_global = settings.get("use_global", False)
+        self.global_dir = settings.get("global_dir", "")
+
+        self.set_workspace()
+
+    def translate_path(self, path):
+        """
+        Translates paths between Windows and Linux environments for specific known mounts.
+        Windows z:\ <-> Linux /mnt/data/
+        Windows i:\ <-> Linux /mnt/inbox/
+        """
+        if not path or not isinstance(path, str):
+            return path
+        
+        # Normalize slashes for internal check
+        p_check = path.replace('\\', '/')
+        
+        if sys.platform == "win32":
+            # Translate Linux -> Windows
+            if p_check.startswith("/mnt/data/"):
+                suffix = path[10:].replace('/', '\\')
+                return f"z:\\{suffix}"
+            elif p_check.startswith("/mnt/inbox/"):
+                suffix = path[11:].replace('/', '\\')
+                return f"i:\\{suffix}"
+            elif p_check == "/mnt/data":
+                return "z:\\"
+            elif p_check == "/mnt/inbox":
+                return "i:\\"
+        else:
+            # Translate Windows -> Linux
+            if p_check.lower().startswith("z:/"):
+                suffix = path[3:].replace('\\', '/')
+                return f"/mnt/data/{suffix}"
+            elif p_check.lower().startswith("i:/"):
+                suffix = path[3:].replace('\\', '/')
+                return f"/mnt/inbox/{suffix}"
+            elif p_check.lower() in ("z:", "z:/"):
+                return "/mnt/data/"
+            elif p_check.lower() in ("i:", "i:/"):
+                return "/mnt/inbox/"
+                
+        return path
+
+    def set_workspace(self):
+        """Configure the active directory and reload cache."""
+        if self.use_global and self.global_dir:
+            self.config_dir = self.global_dir
+        else:
+            self.config_dir = self.local_config_dir
+
+        self.ensure_config_dir()
+        self.log_file = os.path.join(self.config_dir, "process_log.jsonl")
+        self.reload_cache()
+
+    def reload_cache(self):
+        """Load all configurations and patterns into memory for high-speed access."""
+        self._config_cache = {}
+        self._patterns_cache = {}
+        
+        if not os.path.exists(self.config_dir):
+            return
+
+        # Load Patterns
+        patterns_path = os.path.join(self.config_dir, "patterns.json")
+        if os.path.exists(patterns_path):
+            try:
+                with open(patterns_path, 'r', encoding='utf-8') as f:
+                    self._patterns_cache = json.load(f)
+            except Exception:
+                self._patterns_cache = {}
+
+        # Load all individual permit configs
+        try:
+            for f in os.listdir(self.config_dir):
+                if f.endswith('.json') and f not in ('app_settings.json', 'patterns.json'):
+                    permit_id = f[:-5]
+                    path = os.path.join(self.config_dir, f)
+                    try:
+                        with open(path, 'r', encoding='utf-8') as file:
+                            self._config_cache[permit_id] = json.load(file)
+                    except Exception:
+                        pass
+        except Exception:
+            pass
+
+    def ensure_config_dir(self):
+        """Create the config directory and base files if they don't exist."""
+        if not os.path.exists(self.config_dir):
+            os.makedirs(self.config_dir, exist_ok=True)
+            
+        patterns_file = os.path.join(self.config_dir, "patterns.json")
+        if not os.path.exists(patterns_file):
+            with open(patterns_file, 'w', encoding='utf-8') as f:
+                json.dump({}, f, indent=4)
+
+    def load_app_settings(self):
+        """App settings are always stored locally with OS-aware defaults."""
+        settings_path = os.path.join(self.local_config_dir, "app_settings.json")
+        
+        # OS-Specific first-time defaults
+        if sys.platform == "win32":
+            def_sf1, def_sf2 = "i:\\", "z:\\inbox"
+        else:
+            def_sf1, def_sf2 = "/mnt/inbox/", "/mnt/data/"
+            
+        settings = {"dark_mode": True, "font_size": 11, "window_geometry": "1120x950", 
+                    "search_folder_1": def_sf1, "search_folder_2": def_sf2, 
+                    "use_global": False, "global_dir": ""}
+        
+        if os.path.exists(settings_path):
+            try:
+                with open(settings_path, 'r', encoding='utf-8') as f:
+                    loaded = json.load(f)
+                    settings.update(loaded)
+            except Exception:
+                pass
+        
+        # Apply path translation to existing search folders
+        settings["search_folder_1"] = self.translate_path(settings.get("search_folder_1", ""))
+        settings["search_folder_2"] = self.translate_path(settings.get("search_folder_2", ""))
+        return settings
+
+    def save_app_settings(self, settings):
+        settings_path = os.path.join(self.local_config_dir, "app_settings.json")
+        with open(settings_path, 'w', encoding='utf-8') as f:
+            json.dump(settings, f, indent=4)
+
+    def find_transfer_folders(self, search_folders):
+        """Find transfer folders efficiently."""
+        folders_data = []
+        seen_paths = set()
+        
+        if isinstance(search_folders, str):
+            search_folders = [search_folders]
+
+        for search_folder in search_folders:
+            if not search_folder or not os.path.isdir(search_folder):
+                continue
+
+            try:
+                # Use listdir for speed on network shares
+                items = os.listdir(search_folder)
+            except Exception:
+                continue
+
+            for item in items:
+                if item.lower().startswith('transfer-'):
+                    item_path = os.path.join(search_folder, item)
+                    if item_path not in seen_paths and os.path.isdir(item_path):
+                        seen_paths.add(item_path)
+                        folder_data = self.inspect_transfer_folder(item_path)
+                        folders_data.append(folder_data)
+        
+        folders_data.sort(key=lambda x: x['folder_name'], reverse=True)
+        return folders_data
+
+    def inspect_transfer_folder(self, folder_path):
+        """Inspect a transfer folder for a valid zip or a loose receipt*.json."""
+        folder_name = os.path.basename(folder_path)
+        data = {
+            "folder_path": folder_path,
+            "folder_name": folder_name,
+            "zip_path": None,
+            "permitId": "DEFAULT",
+            "receipt": None,
+            "receipt_raw": "",
+            "has_valid_zip": False,
+            "can_process": False,
+            "has_log": False,
+            "file_list": []
+        }
+        
+        # Check for presence of logs
+        if os.path.exists(os.path.join(folder_path, "Process.log")) or \
+           os.path.exists(os.path.join(folder_path, "Inbox Process.log")):
+            data["has_log"] = True
+
+        valid_zip_found = False
+        file_list = []
+        loose_receipt_data = None
+        loose_receipt_raw = ""
+        has_loose_receipt = False
+        
+        # 1. Gather all files and prioritize finding a loose receipt*.json
+        for root, _, files in os.walk(folder_path):
+            for file in files:
+                rel_file = os.path.relpath(os.path.join(root, file), folder_path)
+                file_list.append(rel_file)
+                
+                # Use glob pattern for receipt files
+                if fnmatch.fnmatch(file.lower(), 'receipt*.json') or fnmatch.fnmatch(file.lower(), 'reciept*.json'):
+                    has_loose_receipt = True
+                    receipt_path = os.path.join(root, file)
+                    try:
+                        with open(receipt_path, 'r', encoding='utf-8') as f:
+                            raw_content = f.read()
+                            # If we find multiple, we'll append them for viewing, 
+                            # but pick the first valid one for configuration.
+                            if not loose_receipt_raw:
+                                loose_receipt_raw = raw_content
+                            else:
+                                loose_receipt_raw += f"\n\n--- OTHER RECEIPT: {file} ---\n" + raw_content
+                            
+                        if raw_content.strip() and not loose_receipt_data:
+                            try:
+                                loose_receipt_data = json.loads(raw_content)
+                            except json.JSONDecodeError as e:
+                                warning_msg = f"[WARNING: {file} is not a valid JSON file.]\n[Error details: {e}]\n\n"
+                                loose_receipt_raw = warning_msg + loose_receipt_raw
+                    except Exception as e:
+                        print(f"Error reading {file}: {e}")
+                        loose_receipt_raw = f"[Error reading {file}: {e}]"
+        
+        data["file_list"] = file_list
+        
+        # 2. Check for ZIP files and apply logic
+        for root, _, files in os.walk(folder_path):
+            for file in files:
+                if file.lower().endswith('.zip') and not valid_zip_found:
+                    zip_path = os.path.join(root, file)
+                    data["zip_path"] = zip_path
+                    data["has_valid_zip"] = True
+                    valid_zip_found = True
+                    
+                    if has_loose_receipt:
+                        data["receipt"] = loose_receipt_data
+                        data["receipt_raw"] = loose_receipt_raw if loose_receipt_raw.strip() else "<receipt files are empty>"
+                        data["permitId"] = loose_receipt_data.get("permitId", "DEFAULT") if loose_receipt_data else "DEFAULT"
+                    else:
+                        zip_info = self.inspect_zip(zip_path)
+                        if zip_info and zip_info.get("receipt_raw"):
+                            data["permitId"] = zip_info["permitId"]
+                            data["receipt"] = zip_info["receipt"]
+                            data["receipt_raw"] = zip_info["receipt_raw"]
+                    break
+        
+        if not valid_zip_found:
+            if has_loose_receipt:
+                data["receipt"] = loose_receipt_data
+                data["receipt_raw"] = loose_receipt_raw if loose_receipt_raw.strip() else "<receipt files are empty>"
+                data["permitId"] = loose_receipt_data.get("permitId", "DEFAULT") if loose_receipt_data else "DEFAULT"
+                data["can_process"] = True
+            elif not file_list:
+                data["receipt_raw"] = ""
+                data["can_process"] = False
+            else:
+                data["receipt_raw"] = ""
+                data["can_process"] = True
+        else:
+            data["can_process"] = True
+                
+        return data
+
+    def inspect_zip(self, zip_path):
+        """Read a zip file to extract receipt*.json without full extraction."""
+        data = {
+            "permitId": "DEFAULT",
+            "receipt": None,
+            "receipt_raw": ""
+        }
+        try:
+            with zipfile.ZipFile(zip_path, 'r') as zf:
+                # Use glob pattern search within ZIP
+                receipt_filenames = [f for f in zf.namelist() if fnmatch.fnmatch(os.path.basename(f).lower(), 'receipt*.json') or fnmatch.fnmatch(os.path.basename(f).lower(), 'reciept*.json')]
+                
+                if receipt_filenames:
+                    combined_raw = ""
+                    first_valid_json = None
+                    
+                    for receipt_filename in receipt_filenames:
+                        try:
+                            with zf.open(receipt_filename) as f:
+                                content = f.read().decode('utf-8')
+                                if not combined_raw:
+                                    combined_raw = content
+                                else:
+                                    combined_raw += f"\n\n--- OTHER RECEIPT IN ZIP: {os.path.basename(receipt_filename)} ---\n" + content
+                                
+                                if not first_valid_json:
+                                    try:
+                                        first_valid_json = json.loads(content)
+                                    except json.JSONDecodeError:
+                                        pass
+                        except RuntimeError:
+                            combined_raw += f"\n<{os.path.basename(receipt_filename)} is password protected>"
+                    
+                    data["receipt_raw"] = combined_raw
+                    if first_valid_json:
+                        data["receipt"] = first_valid_json
+                        data["permitId"] = first_valid_json.get("permitId", "DEFAULT")
+                return data
+        except Exception:
+            return None
+
+    def load_config(self, permit_id):
+        return self._config_cache.get(permit_id)
+
+    def get_all_configs(self):
+        return self._config_cache
+
+    def save_config(self, permit_id, config_data):
+        if not permit_id:
+            raise ValueError("Cannot save configuration without a Config ID.")
+        config_path = os.path.join(self.config_dir, f"{permit_id}.json")
+        with open(config_path, 'w', encoding='utf-8') as f:
+            json.dump(config_data, f, indent=4)
+        self._config_cache[permit_id] = config_data
+
+    def delete_config(self, permit_id):
+        if not permit_id:
+            return
+        config_path = os.path.join(self.config_dir, f"{permit_id}.json")
+        if os.path.exists(config_path):
+            os.remove(config_path)
+        if permit_id in self._config_cache:
+            del self._config_cache[permit_id]
+
+    def load_patterns(self):
+        return self._patterns_cache
+
+    def save_pattern(self, pattern, config_data):
+        self._patterns_cache[pattern] = config_data
+        patterns_path = os.path.join(self.config_dir, "patterns.json")
+        with open(patterns_path, 'w', encoding='utf-8') as f:
+            json.dump(self._patterns_cache, f, indent=4)
+
+    def delete_pattern(self, pattern):
+        if pattern in self._patterns_cache:
+            del self._patterns_cache[pattern]
+            patterns_path = os.path.join(self.config_dir, "patterns.json")
+            with open(patterns_path, 'w', encoding='utf-8') as f:
+                json.dump(self._patterns_cache, f, indent=4)
+
+    def write_log(self, status, folder_data, config, actions, message=""):
+        log_entry = {
+            "timestamp": datetime.datetime.now().isoformat(),
+            "user": getpass.getuser(),
+            "status": status,
+            "folder_name": folder_data.get('folder_name', 'Unknown'),
+            "config_id": folder_data.get('permitId', 'Unknown'),
+            "files_processed": len([a for a in actions if a.get('type') in ('extract', 'copy')]),
+            "config_applied": config,
+            "actions": actions,
+            "message": message
+        }
+        try:
+            with open(self.log_file, 'a', encoding='utf-8') as f:
+                f.write(json.dumps(log_entry) + '\n')
+        except Exception:
+            pass
+            
+        post_action = config.get('post_action', 'leave') if config else 'leave'
+        target_local_dir = None
+        
+        if post_action == 'leave':
+            target_local_dir = folder_data.get('folder_path')
+        elif post_action == 'move':
+            for act in actions:
+                if act.get('type') == 'post_processing' and act.get('destination') not in ('DELETED', ''):
+                    target_local_dir = act.get('destination')
+                    break
+            if not target_local_dir:
+                target_local_dir = folder_data.get('folder_path')
+        elif post_action == 'delete' and status != 'SUCCESS':
+            target_local_dir = folder_data.get('folder_path')
+            
+        if target_local_dir and os.path.isdir(target_local_dir):
+            local_log_path = os.path.join(target_local_dir, "Process.log")
+            
+            ts = log_entry["timestamp"].replace("T", " ")[:19]
+            lines = [f"[{ts}] | User: {log_entry['user']} | Config: {log_entry['config_id']} | Folder: {log_entry['folder_name']}"]
+            if message:
+                lines.append(f"  Message: {message}")
+                if actions:
+                    lines.append("  Actions:")
+                    for act in actions:
+                        a_type = str(act.get("type", "")).upper()
+                        a_src = act.get("source", "")
+                        a_dest = act.get("destination", "")
+                        a_msg = act.get("message", "")
+                        if a_type == "CONFLICT_RESOLVED":
+                            lines.append(f"    - CONFLICT: {a_src} -> {a_msg}")
+                        else:
+                            lines.append(f"    - {a_type}: {a_src} -> {a_dest}")
+                lines.append("-" * 80)
+                new_log_text = "\n".join(lines) + "\n\n"
+                
+            existing_content = ""
+            if os.path.exists(local_log_path):
+                try:
+                    with open(local_log_path, 'r', encoding='utf-8') as f:
+                        existing_content = f.read()
+                except Exception:
+                    pass
+                        
+            try:
+                with open(local_log_path, 'w', encoding='utf-8') as f:
+                    f.write(new_log_text + existing_content)
+            except Exception:
+                pass
+
+        for act in actions:
+            dest = act.get("destination", "")
+            if isinstance(dest, str) and dest.lower().endswith(".json") and (fnmatch.fnmatch(os.path.basename(dest).lower(), 'receipt*.json') or fnmatch.fnmatch(os.path.basename(dest).lower(), 'reciept*.json')) and os.path.exists(dest):
+                try:
+                    with open(dest, 'r', encoding='utf-8') as f:
+                        try:
+                            receipt_data = json.load(f)
+                        except json.JSONDecodeError:
+                            receipt_data = {"_raw_file_unparsable": True}
+                    
+                    if "processing_logs" not in receipt_data:
+                        receipt_data["processing_logs"] = []
+                        
+                    receipt_data["processing_logs"].append(log_entry)
+                    
+                    with open(dest, 'w', encoding='utf-8') as f:
+                        json.dump(receipt_data, f, indent=4)
+                except Exception:
+                    pass
+
+    def safe_copy(self, src, dst):
+        """Robust copy that handles 'Operation not permitted' on restrictive mounts."""
+        try:
+            # Try preserving all metadata
+            shutil.copy2(src, dst)
+        except (OSError, PermissionError) as e:
+            # Fallback: copy data only if utime or ownership preservation fails
+            # This handles [Errno 1] on Linux network mounts
+            if e.errno == 1 or "permitted" in str(e).lower():
+                try:
+                    # shutil.copyfile is the most basic; no metadata touch
+                    shutil.copyfile(src, dst)
+                except Exception:
+                    raise e
+            else:
+                raise e
+
+    def safe_rename(self, src, dst):
+        """Robust rename that handles permission issues by falling back to copy+delete."""
+        try:
+            os.rename(src, dst)
+        except (OSError, PermissionError) as e:
+            if e.errno == 1 or "permitted" in str(e).lower():
+                self.safe_copy(src, dst)
+                try:
+                    if os.path.isdir(src):
+                        shutil.rmtree(src)
+                    else:
+                        os.remove(src)
+                except Exception:
+                    pass # Original remains but copy succeeded
+            else:
+                raise e
+
+    def process_zip(self, folder_data, config, progress_callback=None, password_callback=None):
+        target_folder = config.get('target_folder')
+        conflict_action = config.get('conflict_action', 'overwrite')
+        post_action = config.get('post_action', 'leave')
+        target_zip_folder = config.get('target_zip_folder')
+        receipt_folder = config.get('receipt_folder')
+        auto_extract = config.get('auto_extract', True)
+        
+        actions_log = []
+
+        if not target_folder:
+            error_msg = "Target folder is not specified."
+            self.write_log("ERROR", folder_data, config, actions_log, error_msg)
+            raise ValueError(error_msg)
+
+        if not os.path.exists(target_folder):
+            try:
+                os.makedirs(target_folder, exist_ok=True)
+            except Exception as e:
+                error_msg = f"Failed to create Target folder '{target_folder}': {e}"
+                self.write_log("ERROR", folder_data, config, actions_log, error_msg)
+                raise ValueError(error_msg)
+
+        if receipt_folder and not os.path.exists(receipt_folder):
+            try:
+                os.makedirs(receipt_folder, exist_ok=True)
+            except Exception as e:
+                error_msg = f"Failed to create Receipt folder '{receipt_folder}': {e}"
+                self.write_log("ERROR", folder_data, config, actions_log, error_msg)
+                raise ValueError(error_msg)
+                
+        if post_action == 'move':
+            if not target_zip_folder:
+                error_msg = "Processed Folder is not specified but post action is 'move'."
+                self.write_log("ERROR", folder_data, config, actions_log, error_msg)
+                raise ValueError(error_msg)
+            if not os.path.exists(target_zip_folder):
+                try:
+                    os.makedirs(target_zip_folder, exist_ok=True)
+                except Exception as e:
+                    error_msg = f"Failed to create Processed folder '{target_zip_folder}': {e}"
+                    self.write_log("ERROR", folder_data, config, actions_log, error_msg)
+                    raise ValueError(error_msg)
+
+        def get_final_path(extracted_path):
+            if os.path.exists(extracted_path):
+                if conflict_action == 'overwrite':
+                    actions_log.append({
+                        "type": "conflict_resolved",
+                        "source": extracted_path,
+                        "message": "Existing file overwritten"
+                    })
+                elif conflict_action == 'keep_both':
+                    base, ext = os.path.splitext(extracted_path)
+                    counter = 1
+                    while os.path.exists(f"{base} ({counter}){ext}"):
+                        counter += 1
+                    new_path = f"{base} ({counter}){ext}"
+                    actions_log.append({
+                        "type": "conflict_resolved",
+                        "source": extracted_path,
+                        "message": f"Kept both. Extracted file renamed to {os.path.basename(new_path)}"
+                    })
+                    extracted_path = new_path
+                elif conflict_action == 'rename_existing':
+                    timestamp = datetime.datetime.now().strftime("%y%m%d-%H%M%S")
+                    base, ext = os.path.splitext(extracted_path)
+                    dirname = os.path.dirname(extracted_path)
+                    filename = os.path.basename(extracted_path)
+                    renamed_path = os.path.join(dirname, f"{timestamp}_{filename}")
+                    
+                    if os.path.exists(renamed_path):
+                        counter = 1
+                        while os.path.exists(f"{renamed_path}_{counter}"):
+                            counter += 1
+                        renamed_path = f"{renamed_path}_{counter}"
+                    
+                    self.safe_rename(extracted_path, renamed_path)
+                    actions_log.append({
+                        "type": "conflict_resolved",
+                        "source": extracted_path,
+                        "message": f"Existing file renamed to {os.path.basename(renamed_path)}"
+                    })
+            return extracted_path
+
+        def extract_zip_file(zip_path):
+            zip_filename = os.path.basename(zip_path)
+            pwd = None
+            with zipfile.ZipFile(zip_path, 'r') as zf:
+                file_list = [f for f in zf.infolist() if not f.is_dir()]
+                total = len(file_list)
+                for i, zinfo in enumerate(file_list):
+                    original_name = zinfo.filename
+                    
+                    if progress_callback:
+                        progress_callback(i + 1, total, original_name)
+                        
+                    safe_name = original_name.lstrip('/\\')
+                    parts = safe_name.replace('\\', '/').split('/')
+                    
+                    if len(parts) > 0 and parts[0].lower().startswith('transfer-'):
+                        if len(parts) == 1:
+                            continue
+                        safe_name = '/'.join(parts[1:])
+                    
+                    is_absolute = original_name.startswith('/') or original_name.startswith('\\') or (len(original_name) >= 3 and original_name[1] == ':' and original_name[2] in ('/', '\\'))
+                    
+                    # Wildcard match for receipt*.json in ZIP
+                    if fnmatch.fnmatch(os.path.basename(original_name).lower(), 'receipt*.json') or fnmatch.fnmatch(os.path.basename(original_name).lower(), 'reciept*.json'):
+                        timestamp = datetime.datetime.now().strftime("%y%m%d-%H%M%S")
+                        new_filename = f"{timestamp}-{os.path.basename(safe_name)}"
+                        if receipt_folder and os.path.isdir(receipt_folder):
+                            ext_path = os.path.join(receipt_folder, new_filename)
+                        elif is_absolute:
+                            ext_path = os.path.join(os.path.dirname(original_name), new_filename)
+                        else:
+                            ext_path = os.path.join(target_folder, os.path.dirname(safe_name), new_filename)
+                    else:
+                        if is_absolute:
+                            ext_path = original_name
+                        else:
+                            ext_path = os.path.join(target_folder, safe_name)
+                            
+                    os.makedirs(os.path.dirname(ext_path), exist_ok=True)
+                    final_path = get_final_path(ext_path)
+
+                    while True:
+                        try:
+                            with zf.open(zinfo, pwd=pwd) as source, open(final_path, "wb") as target:
+                                shutil.copyfileobj(source, target)
+                            break
+                        except (RuntimeError, OSError) as e:
+                            err_str = str(e).lower()
+                            if 'password' in err_str or 'encrypted' in err_str:
+                                if password_callback:
+                                    pwd_str = password_callback(zip_filename)
+                                    if pwd_str is None:
+                                        raise ValueError(f"Password entry cancelled by user. Extraction of {zip_filename} aborted.")
+                                    pwd = pwd_str.encode('utf-8')
+                                else:
+                                    raise ValueError(f"Password required for {zip_filename} but no password provided.")
+                            else:
+                                raise e
+
+                    actions_log.append({
+                        "type": "extract",
+                        "source": f"{zip_filename} -> {original_name}",
+                        "destination": final_path
+                    })
+
+        try:
+            folder_path = folder_data.get('folder_path')
+            folder_name = folder_data.get('folder_name')
+
+            for root, _, files in os.walk(folder_path):
+                for file in files:
+                    src_path = os.path.join(root, file)
+                    if file.lower() in ('process.log', 'inbox process.log'):
+                        continue
+                        
+                    if auto_extract and file.lower().endswith('.zip'):
+                        extract_zip_file(src_path)
+                    else:
+                        rel_path = os.path.relpath(src_path, folder_path)
+                        # Wildcard match for loose receipt*.json
+                        if fnmatch.fnmatch(file.lower(), 'receipt*.json') or fnmatch.fnmatch(file.lower(), 'reciept*.json'):
+                            timestamp = datetime.datetime.now().strftime("%y%m%d-%H%M%S")
+                            new_filename = f"{timestamp}-{file}"
+                            if receipt_folder and os.path.isdir(receipt_folder):
+                                ext_path = os.path.join(receipt_folder, new_filename)
+                            else:
+                                ext_path = os.path.join(target_folder, os.path.dirname(rel_path), new_filename)
+                        else:
+                            ext_path = os.path.join(target_folder, rel_path)
+                            
+                        os.makedirs(os.path.dirname(ext_path), exist_ok=True)
+                        final_path = get_final_path(ext_path)
+                        self.safe_copy(src_path, final_path)
+                        
+                        actions_log.append({
+                            "type": "copy",
+                            "source": f"{folder_name} -> {rel_path}",
+                            "destination": final_path
+                        })
+
+            if post_action == 'delete':
+                folder_path = folder_data.get('folder_path')
+                if folder_path and os.path.isdir(folder_path):
+                    shutil.rmtree(folder_path)
+                    actions_log.append({
+                        "type": "post_processing",
+                        "source": folder_path,
+                        "destination": "DELETED"
+                    })
+            elif post_action == 'move':
+                folder_path = folder_data.get('folder_path')
+                if not folder_path or not os.path.isdir(folder_path):
+                    raise ValueError(f"Source folder '{folder_path}' is invalid or missing.")
+                    
+                folder_name = folder_data.get('folder_name')
+                dest_path = os.path.join(target_zip_folder, folder_name)
+                
+                if os.path.exists(dest_path):
+                    counter = 1
+                    while os.path.exists(f"{dest_path}_{counter}"):
+                        counter += 1
+                    dest_path = f"{dest_path}_{counter}"
+                
+                # Robust move for restrictive mounts
+                try:
+                    shutil.move(folder_path, dest_path)
+                except (OSError, PermissionError) as e:
+                    if e.errno == 1 or "permitted" in str(e).lower():
+                        # Manual move fallback
+                        os.makedirs(dest_path, exist_ok=True)
+                        for item in os.listdir(folder_path):
+                            s = os.path.join(folder_path, item)
+                            d = os.path.join(dest_path, item)
+                            self.safe_rename(s, d)
+                        shutil.rmtree(folder_path)
+                    else:
+                        raise e
+
+                actions_log.append({
+                    "type": "post_processing",
+                    "source": folder_path,
+                    "destination": dest_path
+                })
+
+            self.write_log("SUCCESS", folder_data, config, actions_log, "Successfully processed folder.")
+
+        except Exception as e:
+            self.write_log("ERROR", folder_data, config, actions_log, str(e))
+            raise e
+
+# --------------------------------------------------------------------------- #
+# GUI APPLICATION
+# --------------------------------------------------------------------------- #
+
+class InboxMoverGUI

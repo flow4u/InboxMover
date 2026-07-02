@@ -272,7 +272,7 @@ class InboxMoverCore:
                 file_list.append(rel_file)
                 
                 # Use glob pattern for receipt files
-                if fnmatch.fnmatch(file.lower(), 'receipt*.json'):
+                if fnmatch.fnmatch(file.lower(), 'receipt*.json') or fnmatch.fnmatch(file.lower(), 'reciept*.json'):
                     has_loose_receipt = True
                     receipt_path = os.path.join(root, file)
                     try:
@@ -345,7 +345,7 @@ class InboxMoverCore:
         try:
             with zipfile.ZipFile(zip_path, 'r') as zf:
                 # Use glob pattern search within ZIP
-                receipt_filenames = [f for f in zf.namelist() if fnmatch.fnmatch(os.path.basename(f).lower(), 'receipt*.json')]
+                receipt_filenames = [f for f in zf.namelist() if fnmatch.fnmatch(os.path.basename(f).lower(), 'receipt*.json') or fnmatch.fnmatch(os.path.basename(f).lower(), 'reciept*.json')]
                 
                 if receipt_filenames:
                     combined_raw = ""
@@ -485,7 +485,7 @@ class InboxMoverCore:
 
         for act in actions:
             dest = act.get("destination", "")
-            if isinstance(dest, str) and dest.lower().endswith(".json") and fnmatch.fnmatch(os.path.basename(dest).lower(), 'receipt*.json') and os.path.exists(dest):
+            if isinstance(dest, str) and dest.lower().endswith(".json") and (fnmatch.fnmatch(os.path.basename(dest).lower(), 'receipt*.json') or fnmatch.fnmatch(os.path.basename(dest).lower(), 'reciept*.json')) and os.path.exists(dest):
                 try:
                     with open(dest, 'r', encoding='utf-8') as f:
                         try:
@@ -645,7 +645,7 @@ class InboxMoverCore:
                     is_absolute = original_name.startswith('/') or original_name.startswith('\\') or (len(original_name) >= 3 and original_name[1] == ':' and original_name[2] in ('/', '\\'))
                     
                     # Wildcard match for receipt*.json in ZIP
-                    if fnmatch.fnmatch(os.path.basename(original_name).lower(), 'receipt*.json'):
+                    if fnmatch.fnmatch(os.path.basename(original_name).lower(), 'receipt*.json') or fnmatch.fnmatch(os.path.basename(original_name).lower(), 'reciept*.json'):
                         timestamp = datetime.datetime.now().strftime("%y%m%d-%H%M%S")
                         new_filename = f"{timestamp}-{os.path.basename(safe_name)}"
                         if receipt_folder and os.path.isdir(receipt_folder):
@@ -702,7 +702,7 @@ class InboxMoverCore:
                     else:
                         rel_path = os.path.relpath(src_path, folder_path)
                         # Wildcard match for loose receipt*.json
-                        if fnmatch.fnmatch(file.lower(), 'receipt*.json'):
+                        if fnmatch.fnmatch(file.lower(), 'receipt*.json') or fnmatch.fnmatch(file.lower(), 'reciept*.json'):
                             timestamp = datetime.datetime.now().strftime("%y%m%d-%H%M%S")
                             new_filename = f"{timestamp}-{file}"
                             if receipt_folder and os.path.isdir(receipt_folder):
@@ -2233,7 +2233,7 @@ Audit trails stored in workspace (`process_log.jsonl`) and individual folders (`
                 return # User cancelled
 
             filename = os.path.basename(file_path).lower()
-            if fnmatch.fnmatch(filename, "receipt*.json"):
+            if fnmatch.fnmatch(filename, "receipt*.json") or fnmatch.fnmatch(filename, "reciept*.json"):
                 try:
                     with open(file_path, 'w', encoding='utf-8') as f:
                         json.dump(receipt_data, f, indent=4)

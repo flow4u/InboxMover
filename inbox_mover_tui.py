@@ -150,7 +150,7 @@ class InboxMoverCore:
             for file in files:
                 rel_file = os.path.relpath(os.path.join(root, file), folder_path)
                 data["file_list"].append(rel_file)
-                if fnmatch.fnmatch(file.lower(), 'receipt*.json'):
+                if fnmatch.fnmatch(file.lower(), 'receipt*.json') or fnmatch.fnmatch(file.lower(), 'reciept*.json'):
                     has_loose_receipt = True
                     try:
                         with open(os.path.join(root, file), 'r', encoding='utf-8') as f:
@@ -185,7 +185,7 @@ class InboxMoverCore:
     def inspect_zip(self, zip_path):
         try:
             with zipfile.ZipFile(zip_path, 'r') as zf:
-                receipt_filenames = [f for f in zf.namelist() if fnmatch.fnmatch(os.path.basename(f).lower(), 'receipt*.json')]
+                receipt_filenames = [f for f in zf.namelist() if fnmatch.fnmatch(os.path.basename(f).lower(), 'receipt*.json') or fnmatch.fnmatch(os.path.basename(f).lower(), 'reciept*.json')]
                 if receipt_filenames:
                     content = zf.open(receipt_filenames[0]).read().decode('utf-8')
                     try: r_data = json.loads(content)
