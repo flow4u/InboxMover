@@ -272,7 +272,7 @@ class InboxMoverCore:
                 file_list.append(rel_file)
                 
                 # Use glob pattern for receipt files
-                if fnmatch.fnmatch(file.lower(), 'receipt*.json'):
+                if fnmatch.fnmatch(file.lower(), 'receipt*.json') or fnmatch.fnmatch(file.lower(), 'reciept*.json'):
                     has_loose_receipt = True
                     receipt_path = os.path.join(root, file)
                     try:
