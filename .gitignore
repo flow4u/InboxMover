@@ -1,0 +1,69 @@
+# =============================================================================
+# Rust / Cargo
+# =============================================================================
+/target/
+**/*.rs.bk
+*.pdb
+
+# Note: Cargo.lock and prebuilt releases in /bin/ are tracked in Git.
+!/bin/
+!/bin/**
+
+# =============================================================================
+# Python (Legacy Scripts & Plugins)
+# =============================================================================
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+build/
+develop-eggs/
+dist/
+downloads/
+eggs/
+.eggs/
+lib/
+lib64/
+parts/
+sdist/
+var/
+wheels/
+*.egg-info/
+.installed.cfg
+*.egg
+*.spec
+.venv/
+venv/
+ENV/
+env/
+
+# =============================================================================
+# R (Legacy Plugin)
+# =============================================================================
+.Rhistory
+.RData
+.Rproj.user/
+
+# =============================================================================
+# Inbox Mover Runtime Logs & Temporary Data
+# =============================================================================
+*.log
+*.jsonl
+process_log.jsonl
+Process.log
+Inbox Process.log
+transfer-*/
+
+# =============================================================================
+# IDEs, Editors & OS Metadata
+# =============================================================================
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+.DS_Store
+Thumbs.db
+Desktop.ini
+
