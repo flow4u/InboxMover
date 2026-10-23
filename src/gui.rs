@@ -173,6 +173,10 @@ pub struct InboxMoverGuiApp {
 
 impl InboxMoverGuiApp {
     pub fn new(cc: &eframe::CreationContext<'_>, core: InboxMoverCore) -> Self {
+        Self::new_with_ctx(&cc.egui_ctx, core)
+    }
+
+    pub fn new_with_ctx(ctx: &egui::Context, core: InboxMoverCore) -> Self {
         let search_dir_1 = core.app_settings.search_folder_1.clone();
         let search_dir_2 = core.app_settings.search_folder_2.clone();
         let show_welcome_modal = core.app_settings.show_welcome_splash;
@@ -219,7 +223,7 @@ impl InboxMoverGuiApp {
             password_input: String::new(),
         };
 
-        app.apply_theme(&cc.egui_ctx);
+        app.apply_theme(ctx);
         app.refresh_folders();
         app
     }
@@ -234,6 +238,13 @@ impl InboxMoverGuiApp {
 
     fn apply_theme(&self, ctx: &egui::Context) {
         let p = self.palette();
+        let theme = if self.core.app_settings.dark_mode {
+            egui::Theme::Dark
+        } else {
+            egui::Theme::Light
+        };
+        ctx.set_theme(theme);
+
         let mut visuals = if self.core.app_settings.dark_mode {
             egui::Visuals::dark()
         } else {
@@ -242,8 +253,11 @@ impl InboxMoverGuiApp {
 
         visuals.panel_fill = p.bg_surface;
         visuals.window_fill = p.surface_container;
+        visuals.window_stroke = Stroke::new(1.0_f32, p.outline_variant);
         visuals.faint_bg_color = p.surface_container_low;
         visuals.extreme_bg_color = p.surface_container_low;
+        visuals.code_bg_color = p.surface_container_low;
+        visuals.override_text_color = Some(p.on_surface);
         visuals.window_rounding = Rounding::same(12.0);
         visuals.menu_rounding = Rounding::same(8.0);
 
@@ -266,19 +280,26 @@ impl InboxMoverGuiApp {
         visuals.widgets.active.fg_stroke = Stroke::new(1.5_f32, p.on_primary_container);
         visuals.widgets.active.rounding = Rounding::same(8.0);
 
+        visuals.widgets.open.bg_fill = p.surface_container_highest;
+        visuals.widgets.open.fg_stroke = Stroke::new(1.0_f32, p.on_surface);
+        visuals.widgets.open.bg_stroke = Stroke::new(1.0_f32, p.primary);
+        visuals.widgets.open.rounding = Rounding::same(8.0);
+
         visuals.selection.bg_fill = p.primary_container;
         visuals.selection.stroke = Stroke::new(1.0_f32, p.on_primary_container);
 
-        ctx.set_visuals(visuals);
-
         let scale = (self.core.app_settings.font_size as f32 / 11.0).clamp(0.75, 2.0);
-        let mut style = (*ctx.style()).clone();
+        let mut style = egui::Style {
+            visuals,
+            ..egui::Style::default()
+        };
         style.spacing.item_spacing = Vec2::new(8.0, 6.0);
         style.spacing.button_padding = Vec2::new(10.0, 5.0);
         for (_text_style, font_id) in style.text_styles.iter_mut() {
             font_id.size = (font_id.size * scale).clamp(10.0, 28.0);
         }
-        ctx.set_style(style);
+        ctx.set_style_of(egui::Theme::Dark, style.clone());
+        ctx.set_style_of(egui::Theme::Light, style);
     }
 
     pub fn refresh_folders(&mut self) {
@@ -545,10 +566,9 @@ impl InboxMoverGuiApp {
             self.select_single_folder(prev);
         }
     }
-}
 
-impl eframe::App for InboxMoverGuiApp {
-    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+    pub fn render_ui(&mut self, ctx: &egui::Context) {
+        self.apply_theme(ctx);
         self.handle_keyboard_shortcuts(ctx);
         let p = self.palette();
         let is_advanced = !self.core.app_settings.simple_mode;
@@ -1724,23 +1744,27 @@ impl InboxMoverGuiApp {
                             .rounding(Rounding::same(10.0))
                             .inner_margin(Margin::same(12.0))
                             .show(&mut cols[0], |ui| {
-                                ui.label(RichText::new("🌱 New to Inbox Mover?").strong());
+                                ui.label(
+                                    RichText::new("🌱 New to Inbox Mover?")
+                                        .strong()
+                                        .color(p.on_surface),
+                                );
                                 ui.add_space(4.0);
                                 ui.label(
                                     RichText::new(
                                         "• Streamlined Simple Mode\n• Smart Context Guide explains what each folder needs\n• Interactive Help Center (F1)",
                                     )
-                                    .small(),
+                                    .small()
+                                    .color(p.on_surface_variant),
                                 );
                                 ui.add_space(8.0);
-                                if ui
-                                    .button(
-                                        RichText::new("Start in Simple Mode (Guided)")
-                                            .strong()
-                                            .color(p.primary),
-                                    )
-                                    .clicked()
-                                {
+                                let simple_start_btn = egui::Button::new(
+                                    RichText::new("Start in Simple Mode (Guided)")
+                                        .strong()
+                                        .color(p.on_primary_container),
+                                )
+                                .fill(p.primary_container);
+                                if ui.add(simple_start_btn).clicked() {
                                     self.core.app_settings.simple_mode = true;
                                     self.core.app_settings.show_guidance = true;
                                     self.core.save_settings();
@@ -1753,22 +1777,27 @@ impl InboxMoverGuiApp {
                             .rounding(Rounding::same(10.0))
                             .inner_margin(Margin::same(12.0))
                             .show(&mut cols[1], |ui| {
-                                ui.label(RichText::new("⚡ Experienced / Daily User?").strong());
+                                ui.label(
+                                    RichText::new("⚡ Experienced / Daily User?")
+                                        .strong()
+                                        .color(p.on_surface),
+                                );
                                 ui.add_space(4.0);
                                 ui.label(
                                     RichText::new(
                                         "• Full Advanced Mode unlocked\n• Hides Smart Guidance banners so they never get in your way\n• Full keyboard navigation",
                                     )
-                                    .small(),
+                                    .small()
+                                    .color(p.on_surface_variant),
                                 );
                                 ui.add_space(8.0);
-                                if ui
-                                    .button(
-                                        RichText::new("Start in Power User Mode (No Banners)")
-                                            .strong(),
-                                    )
-                                    .clicked()
-                                {
+                                let power_start_btn = egui::Button::new(
+                                    RichText::new("Start in Power User Mode (No Banners)")
+                                        .strong()
+                                        .color(p.on_secondary_container),
+                                )
+                                .fill(p.secondary_container);
+                                if ui.add(power_start_btn).clicked() {
                                     self.core.app_settings.simple_mode = false;
                                     self.core.app_settings.show_guidance = false;
                                     self.core.save_settings();
@@ -2474,20 +2503,101 @@ impl InboxMoverGuiApp {
     }
 }
 
+impl eframe::App for InboxMoverGuiApp {
+    fn update(&mut self, ctx: &egui::Context, _frame: &mut eframe::Frame) {
+        self.render_ui(ctx);
+    }
+}
+
 /// Launches the cross-platform Material 3 GUI (identical on Windows and Linux).
+/// Automatically falls back to the built-in CPU/GDI software renderer on GPU-less Windows VMs / RDP
+/// when neither WGPU nor OpenGL 2.0+ is available — requiring zero external installations.
 pub fn run_gui(core: InboxMoverCore) -> Result<(), String> {
-    let options = eframe::NativeOptions {
+    let env_renderer = std::env::var("INBOX_MOVER_RENDERER")
+        .unwrap_or_default()
+        .to_lowercase();
+
+    if env_renderer == "software" || env_renderer == "gdi" || env_renderer == "cpu" {
+        return crate::sw_renderer::run_software_gui(core);
+    }
+
+    // Pre-flight check on Windows: if no WGPU adapter is present (typical on GPU-less VMs / myDRE / RDP
+    // where Windows only provides OpenGL 1.1 GDI Generic), go straight to the built-in CPU/GDI software
+    // renderer before eframe creates a winit EventLoop.
+    #[cfg(target_os = "windows")]
+    if env_renderer.is_empty() {
+        let instance = eframe::wgpu::Instance::default();
+        let adapters = instance.enumerate_adapters(eframe::wgpu::Backends::all());
+        if adapters.is_empty() {
+            return crate::sw_renderer::run_software_gui(core);
+        }
+    }
+
+    let make_options = |renderer: eframe::Renderer| eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
             .with_title("Inbox Mover — Transfer Folder Processor")
             .with_inner_size([1240.0, 800.0])
             .with_min_inner_size([920.0, 620.0]),
+        renderer,
         ..Default::default()
     };
 
-    eframe::run_native(
-        "Inbox Mover",
-        options,
-        Box::new(|cc| Ok(Box::new(InboxMoverGuiApp::new(cc, core)))),
-    )
-    .map_err(|e| format!("Failed to start GUI: {e}"))
+    let renderers = if env_renderer == "glow" || env_renderer == "opengl" {
+        vec![eframe::Renderer::Glow, eframe::Renderer::Wgpu]
+    } else if env_renderer == "wgpu" || env_renderer == "dx12" || env_renderer == "dx11" {
+        vec![eframe::Renderer::Wgpu, eframe::Renderer::Glow]
+    } else if cfg!(target_os = "windows") {
+        vec![eframe::Renderer::Wgpu, eframe::Renderer::Glow]
+    } else {
+        vec![eframe::Renderer::Glow, eframe::Renderer::Wgpu]
+    };
+
+    let mut errors = Vec::new();
+    for renderer in renderers {
+        let core_clone = core.clone();
+        let res = eframe::run_native(
+            "Inbox Mover",
+            make_options(renderer),
+            Box::new(move |cc| Ok(Box::new(InboxMoverGuiApp::new(cc, core_clone)))),
+        );
+        match res {
+            Ok(()) => return Ok(()),
+            Err(e) => {
+                errors.push(format!("{renderer:?}: {e}"));
+            }
+        }
+    }
+
+    // If hardware renderers failed after creating an EventLoop, re-invoke self with INBOX_MOVER_RENDERER=software
+    if cfg!(target_os = "windows") && env_renderer.is_empty() {
+        if let Ok(exe) = std::env::current_exe() {
+            let args: Vec<String> = std::env::args().skip(1).collect();
+            if let Ok(mut child) = std::process::Command::new(exe)
+                .args(&args)
+                .env("INBOX_MOVER_RENDERER", "software")
+                .spawn()
+            {
+                let _ = child.wait();
+                return Ok(());
+            }
+        }
+    }
+
+    let err_msg = format!(
+        "Failed to initialize graphics window ({}).",
+        errors.join(" | ")
+    );
+    let log_path = core.local_config_dir.join("gui_startup_error.log");
+    let _ = std::fs::write(&log_path, &err_msg);
+
+    rfd::MessageDialog::new()
+        .set_level(rfd::MessageLevel::Error)
+        .set_title("Inbox Mover — GUI Startup Error")
+        .set_description(&format!(
+            "{err_msg}\n\nDetails have been written to:\n{}",
+            log_path.display()
+        ))
+        .show();
+
+    Err(err_msg)
 }

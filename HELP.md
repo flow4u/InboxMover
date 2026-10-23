@@ -223,7 +223,7 @@ Automate Inbox Mover in scripts, task schedulers, or cron jobs using `--cli`:
 inbox-mover --cli --dir /mnt/inbox
 
 # 2. Scan two directories using Team workspace rules and overrule receipt.json:
-inbox-mover --cli --dir /mnt/inbox --dir2 /mnt/data/incoming --workspace team --overrule
+inbox-mover --cli --dir /mnt/inbox --dir2 /mnt/data/inbox --workspace team --overrule
 
 # 3. Process a single specific transfer folder:
 inbox-mover --cli --folder /mnt/inbox/transfer-2026-04-survey

@@ -8,6 +8,7 @@ use std::path::{Path, PathBuf};
 use walkdir::WalkDir;
 use zip::ZipArchive;
 
+#[derive(Clone)]
 pub struct InboxMoverCore {
     pub local_config_dir: PathBuf,
     pub config_dir: PathBuf,

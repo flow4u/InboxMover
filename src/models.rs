@@ -210,7 +210,7 @@ fn default_sf2() -> String {
     if cfg!(target_os = "windows") {
         "z:\\inbox".to_string()
     } else {
-        "/mnt/data/".to_string()
+        "/mnt/data/inbox".to_string()
     }
 }
 
