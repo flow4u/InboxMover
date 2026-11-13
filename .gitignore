@@ -1,11 +1,12 @@
 # =============================================================================
-# Rust / Cargo
+# Rust / Cargo (rust/ subdirectory)
 # =============================================================================
+/rust/target/
 /target/
 **/*.rs.bk
 *.pdb
 
-# Note: Cargo.lock and prebuilt releases in /bin/ are tracked in Git.
+# Note: rust/Cargo.lock and prebuilt releases in /bin/ are tracked in Git.
 !/bin/
 !/bin/**
 

@@ -5,9 +5,9 @@ use inbox_mover_core::{cli, core::InboxMoverCore, gui, tui};
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "inbox-mover",
+    name = "inbox-mover-rust",
     version,
-    about = "Inbox Mover — Modern Transfer Folder Processor (GUI, TUI & Headless CLI)"
+    about = "Inbox Mover (Rust Edition) — Modern Transfer Folder Processor (GUI, TUI & Headless CLI)"
 )]
 struct Args {
     /// Launch in Terminal User Interface (TUI) mode instead of the graphical window

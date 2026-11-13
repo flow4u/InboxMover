@@ -1,11 +1,11 @@
-# 📦 Inbox Mover — Complete User Guide & Reference Manual
+# 📦 Inbox Mover (Rust Edition) — Complete User Guide & Reference Manual
 
-**Inbox Mover** is a fast, modern Rust application for unpacking, routing, and auditing incoming `transfer-*` data packages across **Windows** and **Linux**.
+**Inbox Mover (Rust Edition)** is a fast, zero-dependency standalone Rust implementation for unpacking, routing, and auditing incoming `transfer-*` data packages across **Windows** and **Linux**—fully compatible with the Python edition's `permit_configs/`, `receipt.json`, and audit logs.
 
 It provides **three unified interfaces** powered by the exact same Rust core engine:
-1. **Material 3 Graphical User Interface (`inbox-mover-gui` / `inbox-mover`)** — Identical look, feel, and features on both **Windows** and **Linux**.
-2. **Material 3 Terminal User Interface (`inbox-mover-tui` / `inbox-mover --tui`)** — Full-featured terminal dashboard for **Linux** servers, SSH sessions, and keyboard enthusiasts.
-3. **Headless CLI (`inbox-mover --cli`)** — Automated batch processing for scheduled scripts and cron jobs.
+1. **Material 3 Graphical User Interface (`inbox-mover-rust-gui` / `inbox-mover-rust`)** — Identical look, feel, and features on both **Windows** (including GPU-less VMs / RDP) and **Linux**.
+2. **Material 3 Terminal User Interface (`inbox-mover-rust-tui` / `inbox-mover-rust --tui`)** — Full-featured terminal dashboard for **Linux** and **Windows** terminals, SSH sessions, and keyboard enthusiasts.
+3. **Headless CLI (`inbox-mover-rust --cli`)** — Automated batch processing for scheduled scripts and cron jobs.
 
 ---
 
@@ -220,13 +220,13 @@ Automate Inbox Mover in scripts, task schedulers, or cron jobs using `--cli`:
 
 ```bash
 # 1. Process all ready (✓) transfer-* folders in a directory (oldest to newest):
-inbox-mover --cli --dir /mnt/inbox
+inbox-mover-rust --cli --dir /mnt/inbox
 
 # 2. Scan two directories using Team workspace rules and overrule receipt.json:
-inbox-mover --cli --dir /mnt/inbox --dir2 /mnt/data/inbox --workspace team --overrule
+inbox-mover-rust --cli --dir /mnt/inbox --dir2 /mnt/data/inbox --workspace team --overrule
 
 # 3. Process a single specific transfer folder:
-inbox-mover --cli --folder /mnt/inbox/transfer-2026-04-survey
+inbox-mover-rust --cli --folder /mnt/inbox/transfer-2026-04-survey
 ```
 
 ---

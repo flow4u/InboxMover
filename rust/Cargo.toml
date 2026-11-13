@@ -50,16 +50,16 @@ name = "inbox_mover_core"
 path = "src/lib.rs"
 
 [[bin]]
-name = "inbox-mover"
-path = "src/bin/inbox-mover.rs"
+name = "inbox-mover-rust"
+path = "src/bin/inbox-mover-rust.rs"
 
 [[bin]]
-name = "inbox-mover-gui"
-path = "src/bin/inbox-mover-gui.rs"
+name = "inbox-mover-rust-gui"
+path = "src/bin/inbox-mover-rust-gui.rs"
 
 [[bin]]
-name = "inbox-mover-tui"
-path = "src/bin/inbox-mover-tui.rs"
+name = "inbox-mover-rust-tui"
+path = "src/bin/inbox-mover-rust-tui.rs"
 
 [profile.release]
 strip = true

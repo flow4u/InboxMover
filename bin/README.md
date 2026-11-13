@@ -1,69 +1,53 @@
-# Inbox Mover — Prebuilt Executables (Windows & Linux)
+# Inbox Mover — Prebuilt Executables & Edition Chooser
 
-This folder contains standalone, ready-to-run executables for **Windows** and **Linux**. No Python or Rust installation is required to run them.
+Inbox Mover is available in **two interchangeable editions**—**Python** and **Rust**—that share the exact same `permit_configs/` settings, rules, `receipt.json` format, and audit logs:
 
----
+1. **🦀 Rust Prebuilt Executables (`bin/rust/`)** — Standalone native binaries in this folder for **Windows** and **Linux** (modern Material 3 GUI, TUI, and CLI; zero Python or driver installation required, works out-of-the-box on GPU-less Windows VMs / RDP).
+2. **🐍 Python Edition (Repository Root & GitHub Releases)** — Standard-library Python scripts ([`../inbox_mover.py`](../inbox_mover.py), [`../inbox_mover_tui.py`](../inbox_mover_tui.py)) and the Python-based Windows release executable ([`inbox_mover.exe`](https://github.com/flow4u/InboxMover/releases/tag/windows)).
 
-## 🪟 Windows (`bin/windows/`)
-
-| Executable | Recommended For | Description |
-| :--- | :--- | :--- |
-| **[`inbox-mover-gui.exe`](./windows/inbox-mover-gui.exe)** | **Desktop Users (Recommended)** | Launches the **Material 3 Graphical User Interface** directly without opening a background command-prompt window. |
-| **[`inbox-mover.exe`](./windows/inbox-mover.exe)** | **All-in-One / Batch / CLI** | Launches the Material 3 GUI by default, or runs headless batch processing when passed `--cli` in PowerShell / Command Prompt. |
+All Rust executables include `rust` in their filename so they never collide with Python scripts or `inbox_mover.exe` on your Desktop.
 
 ---
 
-## 🐧 Linux (`bin/linux/`)
+## 🪟 Windows — Rust Executables (`bin/rust/windows/`)
 
 | Executable | Recommended For | Description |
 | :--- | :--- | :--- |
-| **[`inbox-mover-gui`](./linux/inbox-mover-gui)** | **Desktop Users (GUI)** | Launches the **Material 3 Graphical User Interface** (identical to the Windows GUI). |
-| **[`inbox-mover-tui`](./linux/inbox-mover-tui)** | **Terminal / SSH Users (TUI)** | Lightweight (2.7 MB) **Material 3 Terminal User Interface** with full keyboard navigation, status badges, and Smart Guidance. |
-| **[`inbox-mover`](./linux/inbox-mover)** | **All-in-One Launcher** | Launches the GUI by default, TUI with `--tui`, or headless batch mode with `--cli`. |
+| **[`inbox-mover-rust-gui.exe`](./rust/windows/inbox-mover-rust-gui.exe)** | **Desktop / VM Users (Recommended)** | Launches the **Material 3 Graphical User Interface** directly without a background console window. Includes built-in CPU rendering for GPU-less Windows VMs / myDRE RDP. |
+| **[`inbox-mover-rust-tui.exe`](./rust/windows/inbox-mover-rust-tui.exe)** | **Terminal Users (TUI)** | Launches the **Material 3 Terminal User Interface** in PowerShell, Command Prompt, or Windows Terminal (no `windows-curses` required). |
+| **[`inbox-mover-rust.exe`](./rust/windows/inbox-mover-rust.exe)** | **All-in-One / Batch / CLI** | Launches the GUI by default, TUI with `--tui`, or headless batch mode with `--cli`. |
 
-### Running on Linux
-Make sure the downloaded binary has execute permissions:
+*(Prefer the Python-based Windows executable or script? See [`inbox_mover.exe` on GitHub Releases](https://github.com/flow4u/InboxMover/releases/tag/windows) or [`../inbox_mover.py`](../inbox_mover.py).)*
+
+---
+
+## 🐧 Linux — Rust Executables (`bin/rust/linux/`)
+
+| Executable | Recommended For | Description |
+| :--- | :--- | :--- |
+| **[`inbox-mover-rust-gui`](./rust/linux/inbox-mover-rust-gui)** | **Desktop Users (GUI)** | Launches the **Material 3 Graphical User Interface** (identical to the Windows Rust GUI; no `python3-tk` required). |
+| **[`inbox-mover-rust-tui`](./rust/linux/inbox-mover-rust-tui)** | **Terminal / SSH Users (TUI)** | Lightweight (~2 MB) **Material 3 Terminal User Interface** with full keyboard navigation, status badges, and Smart Guidance. |
+| **[`inbox-mover-rust`](./rust/linux/inbox-mover-rust)** | **All-in-One Launcher / CLI** | Launches the GUI by default, TUI with `--tui`, or headless batch mode with `--cli`. |
+
+*(Prefer the Python scripts on Linux? Run `python3 ../inbox_mover.py` for GUI or `python3 ../inbox_mover_tui.py` for TUI.)*
+
+### Running Rust Binaries on Linux
+Ensure the downloaded binary has execute permissions:
 ```bash
-chmod +x inbox-mover-gui inbox-mover-tui inbox-mover
-./inbox-mover-gui   # Launch Material 3 GUI
-./inbox-mover-tui   # Launch Material 3 Terminal UI
-./inbox-mover --cli # Run headless batch processing
+chmod +x inbox-mover-rust-gui inbox-mover-rust-tui inbox-mover-rust
+./inbox-mover-rust-gui     # Launch Material 3 GUI
+./inbox-mover-rust-tui     # Launch Material 3 Terminal UI
+./inbox-mover-rust --cli   # Run headless batch processing
 ```
 
 ---
 
-## 📁 Where Configuration & Rules Are Stored
-When you run any of these executables, Inbox Mover looks for (or automatically creates) the `permit_configs/` directory in your working directory (or alongside the executable) to store:
-- `app_settings.json` (theme, UI scale, Simple/Advanced mode, search directories)
+## 📁 Shared Configuration & Full Compatibility
+
+Both the Python and Rust editions read and write the `permit_configs/` directory (in your working directory or alongside the script/executable):
+- `app_settings.json` (theme, font size, Simple/Advanced mode, search directories)
 - `<PermitID>.json` and `patterns.json` (saved routing rules)
-- `process_log.jsonl` (audit history)
+- `process_log.jsonl` (global audit history)
 
-For full usage documentation and keyboard shortcuts, see **[HELP.md](../HELP.md)**.
-
----
-
-## 🛠️ For Developers / Colleagues: Rebuilding After Code Changes
-
-Everything required to modify and rebuild both the Linux and Windows executables is included in this repository (`Cargo.toml`, `Cargo.lock`, `src/`, and `build.sh`).
-
-### 1. One-Time Setup (Ubuntu / Debian Linux)
-If building on a fresh machine, install Rust and the MinGW Windows cross-compiler:
-```bash
-# Install Rust toolchain
-curl --proto '=https' --tlsv1.2 -sSf https://sh.rustup.rs | sh
-rustup target add x86_64-pc-windows-gnu
-
-# Install system libraries for GUI and Windows cross-compilation
-sudo apt update
-sudo apt install -y build-essential pkg-config mingw-w64 \
-    libxcb-render0-dev libxcb-shape0-dev libxcb-xfixes0-dev \
-    libxkbcommon-dev libssl-dev libgtk-3-dev
-```
-
-### 2. Build & Update `bin/`
-After editing any file in `src/`, run from the repository root:
-```bash
-./build.sh
-```
-This compiles the Linux and Windows release binaries, strips debug symbols, and updates `bin/linux/` and `bin/windows/` ready to commit and push.
-
+For full Rust Edition documentation and shortcuts, see **[`../rust/HELP.md`](../rust/HELP.md)**.
+To rebuild these Rust executables from source after editing [`../rust/src/`](../rust/src/), run `./rust/build.sh` (see **[`../rust/README.md`](../rust/README.md)**).

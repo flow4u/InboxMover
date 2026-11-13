@@ -5,9 +5,9 @@ use inbox_mover_core::{core::InboxMoverCore, tui};
 
 #[derive(Parser, Debug)]
 #[command(
-    name = "inbox-mover-tui",
+    name = "inbox-mover-rust-tui",
     version,
-    about = "Inbox Mover — Modern Terminal User Interface (TUI)"
+    about = "Inbox Mover (Rust Edition) — Modern Terminal User Interface (TUI)"
 )]
 struct TuiArgs {
     /// Primary search directory containing transfer-* folders

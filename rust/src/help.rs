@@ -339,10 +339,10 @@ Every processing run records a complete audit trail:
 Run Inbox Mover from scripts or cron jobs without opening a window:
 ```bash
 # Process all ready (✓) folders in a directory automatically:
-inbox-mover --cli --dir /mnt/inbox --workspace personal
+inbox-mover-rust --cli --dir /mnt/inbox --workspace personal
 
 # Overrule receipts and process a single specific transfer folder:
-inbox-mover --cli --folder /mnt/inbox/transfer-12345 --overrule
+inbox-mover-rust --cli --folder /mnt/inbox/transfer-12345 --overrule
 ```"#,
     },
 ];

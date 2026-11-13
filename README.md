@@ -10,6 +10,19 @@ See also [**Inbox Mover FAQ**](https://github.com/flow4u/InboxMover/blob/main/In
 
 *An expermimental TUI, Terminal User Interface, [inbox_mover_tui.py](https://github.com/flow4u/InboxMover/blob/main/inbox_mover_tui.py) is also available. Should work without any additional installation on Linux (both RDP and SSH), on Windows it requires pip install windows-curses.*
 
+---
+
+## **⚖️ Choose Your Edition: Python vs. Rust**
+
+Inbox Mover is maintained in **both Python and Rust**—sharing the exact same `permit_configs/` rules, `receipt.json` format, Windows ↔ Linux path translation, and audit logs so you can pick whichever version suits your environment (or use both interchangeably):
+
+| Edition | Windows | Linux | Best For | Documentation |
+| :--- | :--- | :--- | :--- | :--- |
+| **🐍 Python Edition** *(Scripts & Python `.exe`)* | [`inbox_mover.py`](./inbox_mover.py) / [`inbox_mover.exe` (Release)](https://github.com/flow4u/InboxMover/releases/tag/windows) | [`inbox_mover.py`](./inbox_mover.py) (GUI) & [`inbox_mover_tui.py`](./inbox_mover_tui.py) (TUI) | Easy script customization (including with LLMs), standard Python workflows, and Python/R pipeline plugins | This `README.md` & [`Inbox Mover FAQ.md`](./Inbox%20Mover%20FAQ.md) |
+| **🦀 Rust Edition** *(Standalone Native Executables)* | [`bin/rust/windows/inbox-mover-rust-gui.exe`](./bin/rust/windows/inbox-mover-rust-gui.exe), `inbox-mover-rust-tui.exe`, `inbox-mover-rust.exe` | [`bin/rust/linux/inbox-mover-rust-gui`](./bin/rust/linux/inbox-mover-rust-gui), `inbox-mover-rust-tui`, `inbox-mover-rust` | Zero-install single-file executables (no Python or `python3-tk` needed), Material 3 GUI & TUI, works natively on GPU-less Windows VMs / RDP | [`bin/README.md`](./bin/README.md), [`rust/HELP.md`](./rust/HELP.md) & [`rust/README.md`](./rust/README.md) |
+
+---
+
 
 ## **📜 Open Source & Customization**
 
@@ -25,16 +38,17 @@ These plugins act as a lightweight utility to process, extract, and log ZIP file
 
 ## **🛠️ Installation**
 
-To run Inbox Mover, you need **Python 3** installed on your system. The application uses Python's built-in libraries, including tkinter for the GUI, meaning no external packages (via pip) are required.
+You can run Inbox Mover either as **standalone compiled executables** (no Python required) or directly using **Python 3** (standard library + `tkinter`, no `pip` packages required for the GUI).
 
 ### **Windows**
 
-#### **On Windows (1)** -- no python needed, but you must be able to download an **exe**
+#### **On Windows (Option A — Standalone Executables, no Python needed)**
 
-* See [**inbox_mover.exe**](https://github.com/flow4u/InboxMover/releases/tag/windows)
+* **🦀 Rust Executable (Material 3 GUI / TUI / CLI):** Download **[`inbox-mover-rust-gui.exe`](./bin/rust/windows/inbox-mover-rust-gui.exe)** (or [`inbox-mover-rust-tui.exe`](./bin/rust/windows/inbox-mover-rust-tui.exe) / [`inbox-mover-rust.exe`](./bin/rust/windows/inbox-mover-rust.exe)) from **[`bin/rust/windows/`](./bin/rust/windows/)** and run it directly—no installation or GPU drivers needed.
+* **🐍 Python-based Executable:** See [**inbox_mover.exe**](https://github.com/flow4u/InboxMover/releases/tag/windows)
 
 
-#### **On Windows (2)**
+#### **On Windows (Option B — Python Script `inbox_mover.py`)**
 
 ##### Prerequisit
 1. **AllowList**: python.org, pypi.org, pythonhosted.org
@@ -57,7 +71,17 @@ To run Inbox Mover, you need **Python 3** installed on your system. The applicat
 
 #### **On Linux**
 
-##### Prerequisit
+##### Option A — Standalone Rust Executables (no `python3-tk` needed)
+1. Download **[`inbox-mover-rust-gui`](./bin/rust/linux/inbox-mover-rust-gui)** (desktop GUI), **[`inbox-mover-rust-tui`](./bin/rust/linux/inbox-mover-rust-tui)** (SSH / terminal UI), or **[`inbox-mover-rust`](./bin/rust/linux/inbox-mover-rust)** (all-in-one + `--cli`) from **[`bin/rust/linux/`](./bin/rust/linux/)**.
+2. Make it executable and launch:
+   ```bash
+   chmod +x inbox-mover-rust-gui inbox-mover-rust-tui
+   ./inbox-mover-rust-gui   # or ./inbox-mover-rust-tui
+   ```
+
+##### Option B — Python Script (`inbox_mover.py` / `inbox_mover_tui.py`)
+
+###### Prerequisit
 1. **AllowList**: archive.ubuntu.com
 
 Most Linux distributions come with Python pre-installed, but tkinter often needs to be installed separately. Open your terminal and run:
@@ -66,9 +90,9 @@ Most Linux distributions come with Python pre-installed, but tkinter often needs
 3. sudo apt install python3 python3-tk
 
 
-##### Installation
+###### Installation
 
-1. Download [**inbox\_mover.py**](https://github.com/flow4u/InboxMover/blob/main/inbox_mover.py).
+1. Download [**inbox\_mover.py**](https://github.com/flow4u/InboxMover/blob/main/inbox_mover.py) (and optionally [**inbox\_mover\_tui.py**](https://github.com/flow4u/InboxMover/blob/main/inbox_mover_tui.py)).
 2. You can place it in your \~/Desktop directory or in a shared location like /opt/InboxMover if multiple users need access.
 
 *Note: The application will automatically create a permit\_configs folder in the same directory as the script to save your settings and logs.*
