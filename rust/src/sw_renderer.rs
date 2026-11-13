@@ -551,7 +551,10 @@ impl ApplicationHandler<()> for SwWinitHandler {
         }
 
         let attrs = Window::default_attributes()
-            .with_title("Inbox Mover — Transfer Folder Processor")
+            .with_title(format!(
+                "Inbox Mover v{} — Transfer Folder Processor",
+                env!("CARGO_PKG_VERSION")
+            ))
             .with_inner_size(LogicalSize::new(1240.0, 800.0))
             .with_min_inner_size(LogicalSize::new(920.0, 620.0));
 
@@ -699,6 +702,45 @@ mod tests {
             non_bg_pixels > 10_000,
             "Expected Material 3 GUI to render thousands of non-background pixels, got {non_bg_pixels}"
         );
+
+        // Also test Advanced Mode across both 1240x800 and 920x620 to ensure no right-edge cutoff
+        let mut core_adv = InboxMoverCore::with_base_dir(&temp_dir);
+        core_adv.app_settings.simple_mode = false;
+        core_adv.app_settings.show_welcome_splash = false;
+        let inbox_sim = temp_dir.join("sim_inbox");
+        for n in 0..12 {
+            let tf = inbox_sim.join(format!("transfer-2026-11-13-09-{n:02}-stefan.vanaalst"));
+            let _ = std::fs::create_dir_all(&tf);
+            let _ = std::fs::write(tf.join("data.txt"), "payload");
+        }
+        core_adv.app_settings.search_folder_1 = inbox_sim.to_string_lossy().to_string();
+        let ctx_adv = egui::Context::default();
+        let mut app_adv = InboxMoverGuiApp::new_with_ctx(&ctx_adv, core_adv);
+
+        for (w, h) in [(1240.0_f32, 800.0_f32), (920.0_f32, 620.0_f32)] {
+            for _ in 0..2 {
+                let mut raw = egui::RawInput::default();
+                raw.screen_rect = Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(w, h)));
+                let out = ctx_adv.run(raw, |ctx| {
+                    app_adv.render_ui(ctx);
+                });
+                let prims = ctx_adv.tessellate(out.shapes, out.pixels_per_point);
+                for p in &prims {
+                    if let Primitive::Mesh(mesh) = &p.primitive {
+                        for v in &mesh.vertices {
+                            if p.clip_rect.contains(v.pos) {
+                                assert!(
+                                    v.pos.x <= w + 1.0,
+                                    "Mesh vertex overflowed right screen boundary ({w}): x={}",
+                                    v.pos.x
+                                );
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
 }

@@ -61,7 +61,7 @@ pub fn run_cli(
 
     for folder in &folders {
         let indicator = core.get_folder_status_indicator(folder);
-        if indicator != "✓" {
+        if indicator != "✔" {
             println!(
                 "[CLI] Skipping '{}' (Status: {indicator})",
                 folder.folder_name

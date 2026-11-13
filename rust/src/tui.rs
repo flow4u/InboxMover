@@ -971,8 +971,8 @@ impl TuiApp {
             .map(|(i, folder)| {
                 let ind = self.core.get_folder_status_indicator(folder);
                 let ind_color = match ind {
-                    "✓" => M3_SUCCESS,
-                    "✓ (L)" => M3_WARNING,
+                    "✔" => M3_SUCCESS,
+                    "✔ (L)" => M3_WARNING,
                     _ => M3_ERROR,
                 };
                 let multi_mark = if self.selected_indices.contains(&i)
@@ -1047,7 +1047,7 @@ impl TuiApp {
             M3_MUTED
         };
         let mod_tag = if self.is_rule_modified {
-            " ● Modified (Press 's' to Save Rule *)"
+            " • Modified (Press 's' to Save Rule *)"
         } else {
             ""
         };
@@ -1195,7 +1195,7 @@ impl TuiApp {
             .scroll((self.inspector_scroll, 0))
             .block(
                 Block::default()
-                    .title(" 🧾 Receipt JSON Inspector ")
+                    .title(" 📋 Receipt JSON Inspector ")
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(insp_border))
                     .style(Style::default().bg(M3_SURFACE).fg(M3_ON_SURFACE)),
@@ -1209,11 +1209,11 @@ impl TuiApp {
             M3_SUCCESS
         };
         let footer = Paragraph::new(Line::from(vec![
-            Span::styled(" ● ", Style::default().fg(status_col)),
+            Span::styled(" • ", Style::default().fg(status_col)),
             Span::styled(&self.status_message, Style::default().fg(M3_ON_SURFACE)),
             Span::raw("   |   "),
             Span::styled(
-                "[↑/↓] Select  [Enter/p] Process  [s] Save  [t/z/f] Edit Paths  [?] Help  [q] Quit",
+                "[Up/Down] Select  [Enter/p] Process  [s] Save  [t/z/f] Edit Paths  [?] Help  [q] Quit",
                 Style::default().fg(M3_MUTED),
             ),
         ]))
@@ -1286,14 +1286,14 @@ impl TuiApp {
                     .split(popup);
 
                 let tabs = Tabs::new(vec![
-                    " 1. Step-by-Step Guides (↑/↓) ",
+                    " 1. Step-by-Step Guides (Up/Down) ",
                     " 2. Quick Tips & FAQ ",
                     " 3. Keyboard Shortcuts ",
                 ])
                 .select(*tab)
                 .block(
                     Block::default()
-                        .title(" ❓ Inbox Mover Help Center [Tab/←/→ Switch Tab | Esc Close] ")
+                        .title(" ❓ Inbox Mover Help Center [Tab/Left/Right Switch Tab | Esc Close] ")
                         .borders(Borders::ALL)
                         .border_style(Style::default().fg(M3_PRIMARY))
                         .style(Style::default().bg(M3_SURFACE_HIGH)),
@@ -1315,7 +1315,7 @@ impl TuiApp {
                     let sec = &HELP_SECTIONS[*topic];
                     let mut lines = vec![
                         Line::from(Span::styled(
-                            format!("Topic {}/{}: {} (Use ↑/↓ to switch topic)", topic + 1, HELP_SECTIONS.len(), sec.title),
+                            format!("Topic {}/{}: {} (Use Up/Down to switch topic)", topic + 1, HELP_SECTIONS.len(), sec.title),
                             Style::default().fg(M3_PRIMARY).add_modifier(Modifier::BOLD),
                         )),
                         Line::from(Span::styled(sec.subtitle, Style::default().fg(M3_MUTED))),
@@ -1402,11 +1402,11 @@ impl TuiApp {
                     "Save as Workspace DEFAULT Rule",
                 ];
                 let mut lines = vec![
-                    Line::from("Use [Tab / ↑ / ↓] to choose rule type, edit name/pattern, and press [Enter]:"),
+                    Line::from("Use [Tab / Up / Down] to choose rule type, edit name/pattern, and press [Enter]:"),
                     Line::from(""),
                 ];
                 for (i, m) in modes.iter().enumerate() {
-                    let prefix = if *mode == i { " (●) " } else { " ( ) " };
+                    let prefix = if *mode == i { " (*) " } else { " ( ) " };
                     let col = if *mode == i { M3_PRIMARY } else { M3_MUTED };
                     lines.push(Line::from(Span::styled(
                         format!("{prefix}{m}"),
@@ -1436,7 +1436,7 @@ impl TuiApp {
                 f.render_widget(Clear, popup);
                 let mut lines = vec![
                     Line::from(Span::styled(
-                        "[Tab] Switch Config IDs / Patterns   [↑/↓] Select   [d/Del] Delete Rule   [Esc] Close",
+                        "[Tab] Switch Config IDs / Patterns   [Up/Down] Select   [d/Del] Delete Rule   [Esc] Close",
                         Style::default().fg(M3_PRIMARY),
                     )),
                     Line::from(""),
@@ -1505,9 +1505,9 @@ impl TuiApp {
                         .join("\n")
                 };
                 let title = if *tab == 0 {
-                    " 📜 Local Folder Process.log [Tab: Switch to Global History | ↑/↓ Scroll | Esc Close] "
+                    " 📜 Local Folder Process.log [Tab: Switch to Global History | Up/Down Scroll | Esc Close] "
                 } else {
-                    " 🌍 Global Audit History (process_log.jsonl) [Tab: Switch to Local | ↑/↓ Scroll | Esc Close] "
+                    " 🌍 Global Audit History (process_log.jsonl) [Tab: Switch to Local | Up/Down Scroll | Esc Close] "
                 };
                 let block = Paragraph::new(text)
                     .scroll((*scroll, 0))

@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Inbox Mover TUI v0.17.3
+Inbox Mover TUI v0.20.0
 A TUI conversion of the Inbox Mover utility.
 Runs on standard Python libraries (uses curses for the interface).
 
@@ -23,7 +23,7 @@ import fnmatch
 import curses
 import textwrap
 
-VERSION = "0.17.3 (TUI)"
+VERSION = "0.20.0 (TUI)"
 
 # --------------------------------------------------------------------------- #
 # CORE LOGIC (Preserved from original)
@@ -380,7 +380,7 @@ class InboxMoverTUI:
         # Footer / Commands
         footer_y = height - 2
         self.stdscr.addstr(footer_y - 1, 0, "─" * width)
-        commands = [("P", "Process"), ("E", "Edit Rules"), ("S", "Settings"), ("L", "Logs"), ("Q", "Quit")]
+        commands = [("Up/Down", "Select"), ("P", "Process"), ("E", "Edit Rules"), ("S", "Settings"), ("L", "Logs"), ("Q", "Quit")]
         cmd_str = "  ".join([f"[{k}] {v}" for k, v in commands])
         try: self.stdscr.addstr(footer_y, 2, cmd_str[:width-3])
         except curses.error: pass

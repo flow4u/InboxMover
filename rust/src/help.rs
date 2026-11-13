@@ -50,7 +50,7 @@ pub fn analyze_context(
             level: GuidanceLevel::Idle,
             headline: "No Transfer Folder Selected".to_string(),
             explanation: "Select a 'transfer-*' folder from the Queue on the left, or click 'Browse' next to Search 1 to point Inbox Mover at your Inbox directory.".to_string(),
-            next_step_hint: "Tip: Use ↑/↓ arrow keys to browse folders in the queue, or press F1 / ? anytime for help.".to_string(),
+            next_step_hint: "Tip: Use Up/Down arrow keys to browse folders in the queue, or press F1 / ? anytime for help.".to_string(),
         };
     };
 
@@ -87,7 +87,7 @@ pub fn analyze_context(
     if active_rule.target_folder.trim().is_empty() {
         return ContextualGuidance {
             level: GuidanceLevel::AttentionRequired,
-            headline: "Target Destination Needed (✗ Unconfigured)".to_string(),
+            headline: "Target Destination Needed (✖ Unconfigured)".to_string(),
             explanation: format!(
                 "Folder '{}' (Config ID: {}) does not have a Target Folder configured yet.",
                 folder.folder_name, folder.permit_id
@@ -135,7 +135,7 @@ pub fn analyze_context(
 pub const QUICK_TIPS: &[(&str, &str)] = &[
     (
         "What do the Queue Badges mean?",
-        "• [✓] Ready: A saved rule or receipt provides a valid Target Folder.\n• [✓ (L)] Processed: Contains a local Process.log from an earlier run.\n• [✗] Needs Setup: No Target Folder is configured yet — set one and click Save Rule.",
+        "• [✔] Ready: A saved rule or receipt provides a valid Target Folder.\n• [✔ (L)] Processed: Contains a local Process.log from an earlier run.\n• [✖] Needs Setup: No Target Folder is configured yet — set one and click Save Rule.",
     ),
     (
         "Simple Mode vs. Advanced Mode",
@@ -157,8 +157,8 @@ pub const QUICK_TIPS: &[(&str, &str)] = &[
 
 pub const SHORTCUTS: &[ShortcutEntry] = &[
     ShortcutEntry {
-        key_gui: "↑ / ↓",
-        key_tui: "↑ / ↓ or j / k",
+        key_gui: "Up / Down",
+        key_tui: "Up / Down or j / k",
         action: "Navigate Queue",
         description: "Move selection up or down in the Transfer Folders queue",
     },
@@ -242,9 +242,9 @@ Inbox Mover automates unpacking, routing, and logging incoming data transfers (`
 #### The 3-Step Workflow
 1. **Select Your Inbox (`Search 1`)**: Point `Search 1` at the folder where incoming `transfer-*` packages arrive. Inbox Mover scans up to 2 levels deep.
 2. **Pick a Transfer Folder**: Click any folder in the **Queue** on the left.
-   - **[✓] Green Check**: Ready to go! Destination paths are already known.
-   - **[✓ (L)] Processed**: Already processed earlier (a `Process.log` exists inside).
-   - **[✗] Red Cross**: Needs a **Target Folder** before it can be processed.
+   - **[✔] Green Check**: Ready to go! Destination paths are already known.
+   - **[✔ (L)] Processed**: Already processed earlier (a `Process.log` exists inside).
+   - **[✖] Red Cross**: Needs a **Target Folder** before it can be processed.
 3. **Click Process (or press `Enter`)**:
    - ZIP files are automatically extracted (if *Auto-extract* is enabled).
    - Loose files are copied preserving their folder structure.
@@ -295,7 +295,7 @@ When you check **Overrule receipt**:
 - **After Processing (Post-Action)**:
   - **Move to Processed**: Moves the source `transfer-*` folder into your *Processed Folder*.
   - **Delete Source**: Permanently removes the source `transfer-*` folder after all files are safely extracted/copied.
-  - **Leave in Inbox**: Leaves the `transfer-*` folder where it is and writes a `Process.log` inside it so the queue marks it as `✓ (L)`."#,
+  - **Leave in Inbox**: Leaves the `transfer-*` folder where it is and writes a `Process.log` inside it so the queue marks it as `✔ (L)`."#,
     },
     HelpSection {
         id: "patterns-and-workspaces",
@@ -338,7 +338,7 @@ Every processing run records a complete audit trail:
 ### Headless CLI Mode
 Run Inbox Mover from scripts or cron jobs without opening a window:
 ```bash
-# Process all ready (✓) folders in a directory automatically:
+# Process all ready (✔) folders in a directory automatically:
 inbox-mover-rust --cli --dir /mnt/inbox --workspace personal
 
 # Overrule receipts and process a single specific transfer folder:

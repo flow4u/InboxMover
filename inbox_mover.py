@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Inbox Mover v0.17.3
+Inbox Mover v0.20.0
 A utility to process and extract zip files containing a receipt*.json,
 with both a Material-inspired GUI and a CLI mode.
 Runs entirely on standard Python libraries.
@@ -24,7 +24,9 @@ import webbrowser
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
 
-VERSION = "0.18"
+VERSION = "0.20.0"
+UI_FONT = "Segoe UI" if sys.platform == "win32" else "DejaVu Sans"
+MONO_FONT = "Consolas" if sys.platform == "win32" else "DejaVu Sans Mono"
 
 # --------------------------------------------------------------------------- #
 # HELPERS
@@ -185,9 +187,9 @@ class InboxMoverCore:
         if sys.platform == "win32":
             def_sf1, def_sf2 = "i:\\", "z:\\inbox"
         else:
-            def_sf1, def_sf2 = "/mnt/inbox/", "/mnt/data/"
+            def_sf1, def_sf2 = "/mnt/inbox/", "/mnt/data/inbox"
             
-        settings = {"dark_mode": True, "font_size": 11, "window_geometry": "1120x950", 
+        settings = {"dark_mode": True, "font_size": 10, "window_geometry": "1240x800", 
                     "search_folder_1": def_sf1, "search_folder_2": def_sf2, 
                     "use_global": False, "global_dir": ""}
         
@@ -780,15 +782,22 @@ class InboxMoverGUI:
     def __init__(self, root):
         self.root = root
         self.root.title(f"Inbox Mover v{VERSION}")
-        self.root.minsize(1400, 750)
+        self.root.minsize(980, 620)
         
         self.core = InboxMoverCore()
         settings = self.core.load_app_settings()
         self.is_dark_mode = settings.get("dark_mode", True)
         self.base_font_size = settings.get("font_size", 10)
         
-        window_geometry = settings.get("window_geometry", "1550x850")
-        self.root.geometry(window_geometry)
+        sw = max(1024, self.root.winfo_screenwidth())
+        sh = max(680, self.root.winfo_screenheight())
+        raw_geom = settings.get("window_geometry", "1240x800")
+        m_geom = re.match(r"^(\d+)x(\d+)", str(raw_geom))
+        gw = min(int(m_geom.group(1)) if m_geom else 1240, sw - 40)
+        gh = min(int(m_geom.group(2)) if m_geom else 800, sh - 70)
+        gw = max(980, gw)
+        gh = max(620, gh)
+        self.root.geometry(f"{gw}x{gh}")
         self.root.protocol("WM_DELETE_WINDOW", self.on_closing)
         
         self.folders_data = []
@@ -892,6 +901,15 @@ class InboxMoverGUI:
         ttk.Button(font_menu, text="Reset View", command=self.reset_view, takefocus=0).pack(side=tk.RIGHT, padx=1)
         ttk.Button(font_menu, text="A-", width=3, command=self.decrease_font, takefocus=0).pack(side=tk.RIGHT, padx=1)
 
+        self.footer_bar = ttk.Frame(self.main_frame)
+        self.footer_bar.pack(side=tk.BOTTOM, fill=tk.X, pady=(8, 0))
+        self.lbl_shortcuts_hint = ttk.Label(
+            self.footer_bar,
+            text="Shortcuts: [Up/Down] Select   [Ctrl/Shift+Click] Multi-Select   [Tab] Switch Button   [Enter] Run   [?] Help",
+            style="FooterHint.TLabel",
+        )
+        self.lbl_shortcuts_hint.pack(side=tk.RIGHT)
+
         self.paned = ttk.PanedWindow(self.main_frame, orient=tk.HORIZONTAL)
         self.paned.pack(fill=tk.BOTH, expand=True, pady=(5, 0))
 
@@ -935,7 +953,7 @@ class InboxMoverGUI:
 
         list_frame = ttk.Frame(self.left_panel, style="Card.TFrame")
         list_frame.pack(fill=tk.BOTH, expand=True)
-        font_family = "Segoe UI" if sys.platform == "win32" else "Helvetica"
+        font_family = UI_FONT
         self.queue_listbox = tk.Listbox(list_frame, font=(font_family, self.base_font_size), selectmode=tk.EXTENDED, selectbackground="#2563eb", activestyle="none", highlightthickness=0, borderwidth=0)
         self.queue_listbox.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         scrollbar = ttk.Scrollbar(list_frame, orient=tk.VERTICAL, command=self.queue_listbox.yview)
@@ -949,7 +967,7 @@ class InboxMoverGUI:
         self.placeholder_frame = ttk.Frame(self.right_panel, style="Card.TFrame")
         ttk.Label(self.placeholder_frame, text="Select a folder from the queue to review and process.", style="CardDim.TLabel").pack(expand=True)
         
-        self.detail_container = ttk.Frame(self.right_panel, style="Card.TFrame", padding=25)
+        self.detail_container = ttk.Frame(self.right_panel, style="Card.TFrame", padding=15)
         
         header_row = ttk.Frame(self.detail_container, style="Card.TFrame")
         header_row.pack(fill=tk.X, pady=(0, 5))
@@ -1021,63 +1039,88 @@ class InboxMoverGUI:
         self.btn_create_receipt.pack(side=tk.LEFT)
         ToolTip(self.btn_create_receipt, "Export current settings to a receipt*.json file", self.is_dark_mode)
 
-        ttk.Separator(self.detail_container, orient='horizontal').pack(fill=tk.X, pady=(5, 10))
+        ttk.Separator(self.detail_container, orient='horizontal').pack(fill=tk.X, pady=(5, 8))
 
-        ttk.Label(self.detail_container, text="FILE INSPECTOR", style="SectionHeader.TLabel").pack(anchor=tk.W)
-        self.receipt_text = tk.Text(self.detail_container, wrap=tk.WORD, state=tk.DISABLED, relief="flat", highlightthickness=1, height=8, takefocus=0)
-        self.receipt_text.pack(side=tk.TOP, fill=tk.BOTH, expand=True, pady=(10, 15))
-        scroll_txt = ttk.Scrollbar(self.detail_container, orient=tk.VERTICAL, command=self.receipt_text.yview)
-        self.receipt_text.configure(yscrollcommand=scroll_txt.set)
-
-        card_actions = ttk.Frame(self.detail_container, style="Card.TFrame")
-        card_actions.pack(side=tk.BOTTOM, fill=tk.X)
+        # Pack bottom action bar BEFORE the expandable File Inspector so buttons are never cut off at the bottom!
+        self.card_actions = ttk.Frame(self.detail_container, style="Card.TFrame")
+        self.card_actions.pack(side=tk.BOTTOM, fill=tk.X, pady=(8, 0))
         
-        rule_actions_group = ttk.Frame(card_actions, style="Card.TFrame")
-        rule_actions_group.pack(side=tk.LEFT)
+        self.rule_actions_group = ttk.Frame(self.card_actions, style="Card.TFrame")
+        self.rule_actions_group.pack(side=tk.LEFT)
         
-        rule_header_row = ttk.Frame(rule_actions_group, style="Card.TFrame")
+        rule_header_row = ttk.Frame(self.rule_actions_group, style="Card.TFrame")
         rule_header_row.pack(fill=tk.X, padx=2)
-        ttk.Label(rule_header_row, text="RULES", font=("Segoe UI", 7, "bold"), foreground="#757575").pack(side=tk.LEFT)
+        ttk.Label(rule_header_row, text="RULES", font=(UI_FONT, 7, "bold"), foreground="#757575").pack(side=tk.LEFT)
         
-        self.lbl_active_ws = ttk.Label(rule_header_row, text="", font=("Segoe UI", 7, "bold"), padding=(4, 0))
+        self.lbl_active_ws = ttk.Label(rule_header_row, text="", font=(UI_FONT, 7, "bold"), padding=(4, 0))
         self.lbl_active_ws.pack(side=tk.LEFT, padx=(5, 0))
         
-        rule_btns = ttk.Frame(rule_actions_group, style="Card.TFrame")
+        rule_btns = ttk.Frame(self.rule_actions_group, style="Card.TFrame")
         rule_btns.pack(fill=tk.X)
 
         self.btn_ws_reload = ttk.Button(rule_btns, text="↻", width=3, command=self.apply_workspace, takefocus=0)
-        self.btn_ws_reload.pack(side=tk.LEFT, padx=(0, 5))
+        self.btn_ws_reload.pack(side=tk.LEFT, padx=(0, 4))
         ToolTip(self.btn_ws_reload, "Reload configurations from disk", self.is_dark_mode)
 
         self.btn_manage_configs = ttk.Button(rule_btns, text="⚙ Manage", command=self.open_manage_configs, takefocus=0)
-        self.btn_manage_configs.pack(side=tk.LEFT, padx=(0, 5))
+        self.btn_manage_configs.pack(side=tk.LEFT, padx=(0, 4))
         
         self.btn_delete_config = ttk.Button(rule_btns, text="🗑 Delete", command=self.delete_selected_rule, takefocus=0, state=tk.DISABLED)
-        self.btn_delete_config.pack(side=tk.LEFT, padx=(0, 5))
+        self.btn_delete_config.pack(side=tk.LEFT, padx=(0, 4))
         
         self.btn_save_config = ttk.Button(rule_btns, text="💾 Save", command=self.save_permit_config, takefocus=0)
         self.btn_save_config.pack(side=tk.LEFT)
 
-        ttk.Frame(card_actions, style="Card.TFrame").pack(side=tk.LEFT, fill=tk.X, expand=True)
+        self.actions_spacer = ttk.Frame(self.card_actions, style="Card.TFrame")
+        self.actions_spacer.pack(side=tk.LEFT, fill=tk.X, expand=True)
 
-        folder_actions_group = ttk.Frame(card_actions, style="Card.TFrame")
-        folder_actions_group.pack(side=tk.RIGHT)
+        self.folder_actions_group = ttk.Frame(self.card_actions, style="Card.TFrame")
+        self.folder_actions_group.pack(side=tk.RIGHT)
         
-        ttk.Label(folder_actions_group, text="FOLDER", font=("Segoe UI", 7, "bold"), foreground="#757575").pack(anchor=tk.W, padx=2)
-        folder_btns = ttk.Frame(folder_actions_group, style="Card.TFrame")
+        ttk.Label(self.folder_actions_group, text="FOLDER", font=(UI_FONT, 7, "bold"), foreground="#757575").pack(anchor=tk.W, padx=2)
+        folder_btns = ttk.Frame(self.folder_actions_group, style="Card.TFrame")
         folder_btns.pack(fill=tk.X)
         
         self.btn_open_folder = ttk.Button(folder_btns, text="📂 Open", style="Open.TButton", command=self.open_current_folder)
-        self.btn_open_folder.pack(side=tk.LEFT, padx=(0, 10))
+        self.btn_open_folder.pack(side=tk.LEFT, padx=(0, 6))
 
         self.btn_delete_folder = ttk.Button(folder_btns, text="🗑 Delete", style="Delete.TButton", command=self.delete_current_folder)
-        self.btn_delete_folder.pack(side=tk.LEFT, padx=(0, 10))
+        self.btn_delete_folder.pack(side=tk.LEFT, padx=(0, 6))
         
         self.btn_process = ttk.Button(folder_btns, text="Process", style="Process.TButton", command=self.process_current_zip)
-        self.btn_process.pack(side=tk.LEFT, ipady=4, ipadx=10)
+        self.btn_process.pack(side=tk.LEFT, padx=(0, 6), ipady=3, ipadx=8)
         
         self.btn_batch_process = ttk.Button(folder_btns, text="Batch Process", style="Process.TButton", command=self.batch_process_zips)
-        self.btn_batch_process.pack(side=tk.LEFT, ipady=4, ipadx=10)
+        self.btn_batch_process.pack(side=tk.LEFT, ipady=3, ipadx=8)
+
+        self._actions_stacked = False
+        def _reflow_card_actions(event=None):
+            w = self.card_actions.winfo_width()
+            if w <= 1:
+                return
+            need_stack = w < max(680, self.base_font_size * 66)
+            if need_stack != self._actions_stacked:
+                self._actions_stacked = need_stack
+                self.rule_actions_group.pack_forget()
+                self.actions_spacer.pack_forget()
+                self.folder_actions_group.pack_forget()
+                if need_stack:
+                    self.rule_actions_group.pack(side=tk.TOP, anchor=tk.W, pady=(0, 6))
+                    self.folder_actions_group.pack(side=tk.TOP, anchor=tk.W)
+                else:
+                    self.rule_actions_group.pack(side=tk.LEFT)
+                    self.actions_spacer.pack(side=tk.LEFT, fill=tk.X, expand=True)
+                    self.folder_actions_group.pack(side=tk.RIGHT)
+        self.card_actions.bind("<Configure>", _reflow_card_actions)
+
+        ttk.Label(self.detail_container, text="FILE INSPECTOR", style="SectionHeader.TLabel").pack(anchor=tk.W)
+        inspector_frame = ttk.Frame(self.detail_container, style="Card.TFrame")
+        inspector_frame.pack(side=tk.TOP, fill=tk.BOTH, expand=True, pady=(6, 4))
+        self.receipt_text = tk.Text(inspector_frame, wrap=tk.WORD, state=tk.DISABLED, relief="flat", highlightthickness=1, height=6, takefocus=0)
+        scroll_txt = ttk.Scrollbar(inspector_frame, orient=tk.VERTICAL, command=self.receipt_text.yview)
+        self.receipt_text.configure(yscrollcommand=scroll_txt.set)
+        scroll_txt.pack(side=tk.RIGHT, fill=tk.Y)
+        self.receipt_text.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
 
         # Keyboard Loop
         for btn in [self.btn_open_folder, self.btn_delete_folder, self.btn_process, self.btn_batch_process, self.btn_save_config, self.btn_manage_configs, self.btn_open_local_log, self.btn_create_receipt]:
@@ -1204,7 +1247,7 @@ class InboxMoverGUI:
         main_frame = ttk.Frame(container, style="Card.TFrame", padding=30)
         main_frame.pack(fill=tk.BOTH, expand=True)
 
-        font_family = "Segoe UI" if sys.platform == "win32" else "Helvetica"
+        font_family = UI_FONT
         ttk.Label(main_frame, text="Welcome to Inbox Mover", font=(font_family, self.base_font_size + 8, "bold")).pack(pady=(0, 5))
         
         url_str = "https://github.com/flow4u/InboxMover"
@@ -1220,11 +1263,11 @@ class InboxMoverGUI:
             f = ttk.Frame(grid, style="Card.TFrame")
             f.grid(row=row, column=0, sticky=tk.E, pady=10, padx=(0, 20))
             for k in keys:
-                lbl = tk.Label(f, text=k, bg=key_bg, fg=key_fg, font=("Courier", self.base_font_size + 1, "bold"), padx=10, pady=4, relief="flat")
+                lbl = tk.Label(f, text=k, bg=key_bg, fg=key_fg, font=(MONO_FONT, self.base_font_size + 1, "bold"), padx=10, pady=4, relief="flat")
                 lbl.pack(side=tk.LEFT, padx=3)
             ttk.Label(grid, text=desc, font=(font_family, self.base_font_size + 1)).grid(row=row, column=1, sticky=tk.W, pady=10)
 
-        add_shortcut(0, ["↑", "↓"], "Cycle through pending folders")
+        add_shortcut(0, ["Up", "Down"], "Cycle through pending folders")
         add_shortcut(1, ["Ctrl+Click"], "Select multiple for Batch Process")
         add_shortcut(2, ["Tab", "Shift+Tab"], "Switch focus between main action buttons")
         add_shortcut(3, ["Enter"], "Execute the highlighted action")
@@ -1284,18 +1327,19 @@ class InboxMoverGUI:
     def apply_fonts(self):
         style = ttk.Style()
         base = self.base_font_size
-        font_family = "Segoe UI" if sys.platform == "win32" else "Helvetica"
+        font_family = UI_FONT
         style.configure(".", font=(font_family, base))
         style.configure("TButton", font=(font_family, base))
         style.configure("AppTitle.TLabel", font=(font_family, base + 8, "bold"))
         style.configure("SectionHeader.TLabel", font=(font_family, base, "bold"))
         style.configure("CardTitle.TLabel", font=(font_family, base + 6, "bold"))
         style.configure("CardDim.TLabel", font=(font_family, base))
+        style.configure("FooterHint.TLabel", font=(font_family, max(8, base - 1)))
         style.configure("CardAccent.TLabel", font=(font_family, base, "italic"))
         style.configure("Badge.TLabel", font=(font_family, base, "bold"))
         style.configure("Process.TButton", font=(font_family, base + 2, "bold"))
-        self.receipt_text.configure(font=("Courier", base))
-        self.receipt_text.tag_configure("warning", font=("Courier", base, "bold"))
+        self.receipt_text.configure(font=(MONO_FONT, base))
+        self.receipt_text.tag_configure("warning", font=(MONO_FONT, base, "bold"))
         self.queue_listbox.configure(font=(font_family, base))
 
     def increase_font(self):
@@ -1318,17 +1362,15 @@ class InboxMoverGUI:
         try: self.root.state('normal')
         except Exception: pass
         
-        sw, sh = self.root.winfo_screenwidth(), self.root.winfo_screenheight()
-        tw, th = max(1300, min(1500, sw - 50)), max(750, min(850, sh - 100))
-        self.root.minsize(tw, th)
-        self.root.maxsize(tw, th)
+        sw, sh = max(1024, self.root.winfo_screenwidth()), max(680, self.root.winfo_screenheight())
+        tw, th = max(980, min(1280, sw - 50)), max(620, min(800, sh - 80))
+        self.root.minsize(980, 620)
+        self.root.maxsize(sw, sh)
         self.root.geometry(f"{tw}x{th}")
         self.root.update_idletasks()
-        self.root.minsize(1300, 750)
-        self.root.maxsize(sw, sh)
-        try: self.paned.sashpos(0, int(tw * 0.35))
+        try: self.paned.sashpos(0, int(tw * 0.34))
         except Exception: pass
-        try: self.form_paned.sashpos(0, int((tw * 0.65) * 0.5))
+        try: self.form_paned.sashpos(0, int((tw * 0.66) * 0.5))
         except Exception: pass
         self.apply_fonts()
         self.save_settings()
@@ -1372,6 +1414,7 @@ class InboxMoverGUI:
         style.configure("Card.TFrame", background=card)
         style.configure("Card.TLabel", background=card, foreground=fg)
         style.configure("AppTitle.TLabel", background=bg, foreground=fg)
+        style.configure("FooterHint.TLabel", background=bg, foreground=dim)
         style.configure("SectionHeader.TLabel", background=card, foreground=dim)
         style.configure("CardTitle.TLabel", background=card, foreground=fg)
         style.configure("CardDim.TLabel", background=card, foreground=dim)
@@ -1392,7 +1435,7 @@ class InboxMoverGUI:
         # Define warning tag colors
         warn_fg = "#ef4444" if self.is_dark_mode else "#c62828"
         self.receipt_text.configure(bg=card if self.is_dark_mode else "#f9f9f9", fg=fg, insertbackground=fg, highlightbackground=border)
-        self.receipt_text.tag_configure("warning", foreground=warn_fg, font=("Courier", self.base_font_size, "bold"))
+        self.receipt_text.tag_configure("warning", foreground=warn_fg, font=(MONO_FONT, self.base_font_size, "bold"))
         
         if hasattr(self, 'queue_listbox'):
             self.queue_listbox.configure(bg=eb if self.is_dark_mode else "#ffffff", fg=fg, selectbackground=acc, selectforeground="#000000" if self.is_dark_mode else "#ffffff")
@@ -1429,15 +1472,21 @@ class InboxMoverGUI:
         
         w = tk.Toplevel(self.root)
         w.title("Processing Log")
-        w.geometry("900x650")
+        mw = min(900, max(600, self.root.winfo_screenwidth() - 80))
+        mh = min(650, max(480, self.root.winfo_screenheight() - 100))
+        w.geometry(f"{mw}x{mh}")
         w.configure(bg=bg_col)
         w.attributes("-topmost", True)
         w.transient(self.root)
         w.grab_set()
         
+        btn_close = ttk.Button(w, text="Close Documentation", command=w.destroy, width=25)
+        btn_close.pack(side=tk.BOTTOM, pady=(10, 15))
+        btn_close.bind('<Return>', lambda e: btn_close.invoke())
+
         f = ttk.Frame(w, padding="15", style="Card.TFrame")
         f.pack(fill=tk.BOTH, expand=True)
-        txt = tk.Text(f, wrap=tk.WORD, font=("Courier", self.base_font_size), relief="flat", highlightthickness=1)
+        txt = tk.Text(f, wrap=tk.WORD, font=(MONO_FONT, self.base_font_size), relief="flat", highlightthickness=1)
         txt.configure(bg=bg_col, fg=fg_col, insertbackground=fg_col, highlightbackground=border_col)
         txt.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
@@ -1466,9 +1515,6 @@ class InboxMoverGUI:
         txt.config(state=tk.DISABLED)
         w.lift()
         w.focus_force()
-        btn_close = ttk.Button(w, text="Close Documentation", command=w.destroy, width=25)
-        btn_close.pack(pady=(10, 15))
-        btn_close.bind('<Return>', lambda e: btn_close.invoke())
 
     def open_local_log(self):
         if self.current_index < 0 or not self.folders_data: return
@@ -1489,11 +1535,20 @@ class InboxMoverGUI:
         
         w = tk.Toplevel(self.root)
         w.title(f"Folder Process Log - {os.path.basename(active_log)}")
-        w.geometry("1000x700")
+        mw = min(1000, max(640, self.root.winfo_screenwidth() - 80))
+        mh = min(700, max(500, self.root.winfo_screenheight() - 100))
+        w.geometry(f"{mw}x{mh}")
         w.configure(bg=bg_col)
         w.attributes("-topmost", True)
         w.transient(self.root)
         w.grab_set()
+
+        footer = ttk.Frame(w, padding=(0, 0, 0, 15), style="Card.TFrame")
+        footer.pack(side=tk.BOTTOM, fill=tk.X)
+        btn_close = ttk.Button(footer, text="Close Audit", command=w.destroy, width=25)
+        btn_close.pack()
+        btn_close.bind('<Return>', lambda e: btn_close.invoke())
+        w.bind('<Escape>', lambda e: w.destroy())
         
         f = ttk.Frame(w, padding="15", style="Card.TFrame")
         f.pack(fill=tk.BOTH, expand=True)
@@ -1501,10 +1556,10 @@ class InboxMoverGUI:
         # Header in popup
         header = ttk.Frame(f, style="Card.TFrame")
         header.pack(fill=tk.X, pady=(0, 10))
-        ttk.Label(header, text="Local Audit Trail", font=("Segoe UI", 12, "bold")).pack(side=tk.LEFT)
+        ttk.Label(header, text="Local Audit Trail", font=(UI_FONT, 12, "bold")).pack(side=tk.LEFT)
         ttk.Label(header, text=f"File: {active_log}", style="CardDim.TLabel").pack(side=tk.RIGHT)
         
-        txt = tk.Text(f, wrap=tk.WORD, font=("Courier", self.base_font_size), relief="flat", highlightthickness=1)
+        txt = tk.Text(f, wrap=tk.WORD, font=(MONO_FONT, self.base_font_size), relief="flat", highlightthickness=1)
         txt.configure(bg=bg_col, fg=fg_col, insertbackground=fg_col, highlightbackground=border_col)
         txt.pack(side=tk.LEFT, fill=tk.BOTH, expand=True)
         
@@ -1513,8 +1568,8 @@ class InboxMoverGUI:
         sb.pack(side=tk.RIGHT, fill=tk.Y)
         
         # Enhanced syntax highlighting for log readability
-        txt.tag_configure("success", foreground="#10b981", font=("Courier", self.base_font_size, "bold"))
-        txt.tag_configure("error", foreground="#ef4444", font=("Courier", self.base_font_size, "bold"))
+        txt.tag_configure("success", foreground="#10b981", font=(MONO_FONT, self.base_font_size, "bold"))
+        txt.tag_configure("error", foreground="#ef4444", font=(MONO_FONT, self.base_font_size, "bold"))
         txt.tag_configure("conflict", foreground="#f59e0b")
         txt.tag_configure("action", foreground="#3b82f6")
         txt.tag_configure("dim", foreground="#6b7280")
@@ -1538,13 +1593,6 @@ class InboxMoverGUI:
         txt.config(state=tk.DISABLED)
         w.lift()
         w.focus_force()
-        
-        footer = ttk.Frame(w, padding=(0, 0, 0, 15), style="Card.TFrame")
-        footer.pack(fill=tk.X)
-        btn_close = ttk.Button(footer, text="Close Audit", command=w.destroy, width=25)
-        btn_close.pack()
-        btn_close.bind('<Return>', lambda e: btn_close.invoke())
-        w.bind('<Escape>', lambda e: w.destroy())
 
     def clear_log(self):
         if not os.path.exists(self.core.log_file): return
@@ -1560,7 +1608,9 @@ class InboxMoverGUI:
         
         w = tk.Toplevel(self.root)
         w.title("Inbox Mover Documentation")
-        w.geometry("950x850")
+        mw = min(950, max(640, self.root.winfo_screenwidth() - 80))
+        mh = min(780, max(520, self.root.winfo_screenheight() - 100))
+        w.geometry(f"{mw}x{mh}")
         w.configure(bg=bg_col)
         w.attributes("-topmost", True)
         w.transient(self.root)
@@ -1576,11 +1626,11 @@ class InboxMoverGUI:
         txt.configure(yscrollcommand=sb.set)
         sb.pack(side=tk.RIGHT, fill=tk.Y)
         
-        font_family = "Segoe UI" if sys.platform == "win32" else "Helvetica"
+        font_family = UI_FONT
         txt.tag_configure("h1", font=(font_family, self.base_font_size + 10, "bold"), foreground=header_fg, spacing1=20, spacing3=12)
         txt.tag_configure("h2", font=(font_family, self.base_font_size + 4, "bold"), foreground=header_fg, spacing1=15, spacing3=8)
         txt.tag_configure("bold", font=(font_family, self.base_font_size, "bold"))
-        txt.tag_configure("code", font=("Courier", self.base_font_size), background=code_bg)
+        txt.tag_configure("code", font=(MONO_FONT, self.base_font_size), background=code_bg)
         txt.tag_configure("bullet", lmargin1=25, lmargin2=40)
         
         doc = f"""# Inbox Mover v{VERSION} Manual
@@ -1588,7 +1638,7 @@ class InboxMoverGUI:
 Inbox Mover processes project folders (starting with `transfer-`) by extracting contents to specified targets based on rules and descriptors.
 
 # ⌨️ Keyboard Support
-* **Arrows:** Cycle through pending folders.
+* **Up / Down Arrows:** Cycle through pending folders.
 * **Tab / Shift-Tab:** Switch focus between action buttons.
 * **Enter:** Activate highlighted button (marked with ► arrows).
 * **Esc:** Close any popup window.
@@ -1770,7 +1820,7 @@ Audit trails stored in workspace (`process_log.jsonl`) and individual folders (`
             self.clear_zip_display()
             return
         self.placeholder_frame.pack_forget()
-        self.detail_container.pack(fill=tk.BOTH, expand=True, padx=20, pady=20)
+        self.detail_container.pack(fill=tk.BOTH, expand=True, padx=10, pady=10)
         sel = self.queue_listbox.curselection()
         if self.current_index not in sel:
             self.queue_listbox.selection_clear(0, tk.END)
@@ -2053,7 +2103,7 @@ Audit trails stored in workspace (`process_log.jsonl`) and individual folders (`
         d.configure(bg=bg_col)
         c = tk.Frame(d, bg=bg_col, highlightbackground="#e53935", highlightthickness=2); c.pack(fill=tk.BOTH, expand=True)
         i = ttk.Frame(c, style="Card.TFrame", padding=20); i.pack(fill=tk.BOTH, expand=True)
-        ttk.Label(i, text="PERMANENT DELETION", font=("Segoe UI", 12, "bold"), foreground="#e53935").pack(pady=(0, 10))
+        ttk.Label(i, text="PERMANENT DELETION", font=(UI_FONT, 12, "bold"), foreground="#e53935").pack(pady=(0, 10))
         ttk.Label(i, text=f"Delete folder: {name}?", justify=tk.CENTER).pack(pady=5)
         bf = ttk.Frame(i, style="Card.TFrame"); bf.pack(side=tk.BOTTOM, fill=tk.X, pady=(15, 0))
         res = [False]
@@ -2087,7 +2137,9 @@ Audit trails stored in workspace (`process_log.jsonl`) and individual folders (`
         
         w = tk.Toplevel(self.root)
         w.title("Manage Rules")
-        w.geometry("1050x750")
+        mw = min(1050, max(680, self.root.winfo_screenwidth() - 80))
+        mh = min(750, max(520, self.root.winfo_screenheight() - 100))
+        w.geometry(f"{mw}x{mh}")
         w.configure(bg=bg_col)
         w.attributes("-topmost", True)
         w.transient(self.root)
@@ -2097,7 +2149,7 @@ Audit trails stored in workspace (`process_log.jsonl`) and individual folders (`
         header_area = ttk.Frame(w, padding=(15, 15, 15, 0), style="Card.TFrame")
         header_area.pack(fill=tk.X)
         
-        ttk.Label(header_area, text="Editing Rules Workspace:", font=("Segoe UI", 10, "bold")).pack(side=tk.LEFT)
+        ttk.Label(header_area, text="Editing Rules Workspace:", font=(UI_FONT, 10, "bold")).pack(side=tk.LEFT)
         
         pop_ws_var = tk.StringVar(value=self.workspace_mode_var.get())
         
@@ -2129,11 +2181,11 @@ Audit trails stored in workspace (`process_log.jsonl`) and individual folders (`
         mp = ttk.PanedWindow(w, orient=tk.HORIZONTAL); mp.pack(fill=tk.BOTH, expand=True, padx=15, pady=15)
         lf = ttk.Frame(mp, style="Card.TFrame", padding=10); mp.add(lf, weight=1)
         ttk.Label(lf, text="Config IDs", style="Header.TLabel").pack(anchor=tk.W)
-        self.config_listbox = tk.Listbox(lf, font=("Segoe UI", self.base_font_size), bg=list_bg, fg=fg_col, selectbackground="#2563eb", activestyle="none", highlightthickness=0)
+        self.config_listbox = tk.Listbox(lf, font=(UI_FONT, self.base_font_size), bg=list_bg, fg=fg_col, selectbackground="#2563eb", activestyle="none", highlightthickness=0)
         self.config_listbox.pack(fill=tk.BOTH, expand=True)
         ttk.Separator(lf, orient='horizontal').pack(fill=tk.X, pady=10)
         ttk.Label(lf, text="Patterns", style="Header.TLabel").pack(anchor=tk.W)
-        self.pattern_listbox = tk.Listbox(lf, font=("Segoe UI", self.base_font_size), bg=list_bg, fg=fg_col, selectbackground="#2563eb", activestyle="none", highlightthickness=0)
+        self.pattern_listbox = tk.Listbox(lf, font=(UI_FONT, self.base_font_size), bg=list_bg, fg=fg_col, selectbackground="#2563eb", activestyle="none", highlightthickness=0)
         self.pattern_listbox.pack(fill=tk.BOTH, expand=True)
         rf = ttk.Frame(mp, style="Card.TFrame", padding=20); mp.add(rf, weight=3)
         

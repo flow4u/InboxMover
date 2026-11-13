@@ -744,6 +744,7 @@ impl InboxMoverGuiApp {
         // ====================================================================
         // BOTTOM STATUS & SHORTCUT FOOTER BAR
         // ====================================================================
+        let font_scale = (self.core.app_settings.font_size as f32 / 11.0).clamp(0.75, 2.0);
         egui::TopBottomPanel::bottom("m3_bottom_bar")
             .frame(
                 egui::Frame::none()
@@ -752,34 +753,60 @@ impl InboxMoverGuiApp {
                     .stroke(Stroke::new(1.0_f32, p.outline_variant)),
             )
             .show(ctx, |ui| {
-                ui.horizontal(|ui| {
-                    let status_color = if self.status_is_error {
-                        p.error
-                    } else {
-                        p.success
-                    };
-                    ui.label(RichText::new("●").color(status_color));
-                    ui.label(RichText::new(&self.status_message).color(p.on_surface));
+                let status_color = if self.status_is_error {
+                    p.error
+                } else {
+                    p.success
+                };
+                let shortcuts_str =
+                    "Shortcuts: [Up/Down] Select  [Enter] Process  [Ctrl+S] Save Rule  [Del] Delete  [F5] Refresh  [F1] Help";
 
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.label(
-                            RichText::new(
-                                "Shortcuts: [↑/↓] Select  [Enter] Process  [Ctrl+S] Save Rule  [Del] Delete  [F5] Refresh  [F1] Help",
+                if ui.available_width() >= 860.0 * font_scale {
+                    ui.horizontal(|ui| {
+                        let (dot_rect, _) =
+                            ui.allocate_exact_size(Vec2::splat(10.0), Sense::hover());
+                        ui.painter()
+                            .circle_filled(dot_rect.center(), 4.5, status_color);
+                        ui.add(
+                            egui::Label::new(
+                                RichText::new(&self.status_message).color(p.on_surface),
                             )
-                            .small()
-                            .color(p.on_surface_variant),
+                            .truncate(),
+                        );
+
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.label(
+                                RichText::new(shortcuts_str)
+                                    .small()
+                                    .color(p.on_surface_variant),
+                            );
+                        });
+                    });
+                } else {
+                    ui.horizontal_wrapped(|ui| {
+                        let (dot_rect, _) =
+                            ui.allocate_exact_size(Vec2::splat(10.0), Sense::hover());
+                        ui.painter()
+                            .circle_filled(dot_rect.center(), 4.5, status_color);
+                        ui.label(RichText::new(&self.status_message).color(p.on_surface));
+                        ui.separator();
+                        ui.label(
+                            RichText::new(shortcuts_str)
+                                .small()
+                                .color(p.on_surface_variant),
                         );
                     });
-                });
+                }
             });
 
         // ====================================================================
         // LEFT SIDEBAR: WORKSPACE, SEARCH DIRECTORIES & TRANSFER QUEUE
         // ====================================================================
+        let max_sidebar_w = (ctx.screen_rect().width() * 0.40).clamp(300.0, 460.0);
         egui::SidePanel::left("m3_left_sidebar")
             .default_width(360.0)
             .min_width(290.0)
-            .max_width(520.0)
+            .max_width(max_sidebar_w)
             .frame(
                 egui::Frame::none()
                     .fill(p.surface_container_low)
@@ -787,6 +814,9 @@ impl InboxMoverGuiApp {
                     .stroke(Stroke::new(1.0_f32, p.outline_variant)),
             )
             .show(ctx, |ui| {
+                let sidebar_w = ui.available_width().max(240.0);
+                ui.set_max_width(sidebar_w);
+
                 if is_advanced {
                     egui::Frame::none()
                         .fill(p.surface_container)
@@ -794,7 +824,10 @@ impl InboxMoverGuiApp {
                         .inner_margin(Margin::same(10.0))
                         .stroke(Stroke::new(1.0_f32, p.outline_variant))
                         .show(ui, |ui| {
-                            ui.horizontal(|ui| {
+                            let ws_inner_w = (sidebar_w - 22.0).max(200.0);
+                            ui.set_min_width(ws_inner_w);
+                            ui.set_max_width(ws_inner_w);
+                            ui.horizontal_wrapped(|ui| {
                                 ui.label(RichText::new("Workspace:").strong());
                                 let is_personal = !self.core.app_settings.use_global;
                                 if ui
@@ -814,20 +847,15 @@ impl InboxMoverGuiApp {
                                     self.refresh_folders();
                                 }
 
-                                ui.with_layout(
-                                    egui::Layout::right_to_left(egui::Align::Center),
-                                    |ui| {
-                                        if ui
-                                            .small_button("⇄ Sync")
-                                            .on_hover_text(
-                                                "Merge local Personal rules into Team workspace",
-                                            )
-                                            .clicked()
-                                        {
-                                            self.show_sync_modal = true;
-                                        }
-                                    },
-                                );
+                                if ui
+                                    .small_button("⟳ Sync")
+                                    .on_hover_text(
+                                        "Merge local Personal rules into Team workspace",
+                                    )
+                                    .clicked()
+                                {
+                                    self.show_sync_modal = true;
+                                }
                             });
 
                             ui.add_space(4.0);
@@ -857,17 +885,44 @@ impl InboxMoverGuiApp {
                     .inner_margin(Margin::same(10.0))
                     .stroke(Stroke::new(1.0_f32, p.outline_variant))
                     .show(ui, |ui| {
-                        ui.horizontal(|ui| {
+                        let search_inner_w = (sidebar_w - 22.0).max(200.0);
+                        ui.set_min_width(search_inner_w);
+                        ui.set_max_width(search_inner_w);
+                        ui.horizontal_wrapped(|ui| {
                             ui.label(RichText::new("🔍 Inbox Search Folders").strong());
+                            if ui
+                                .button("⟳ Refresh (F5)")
+                                .on_hover_text("Scan search directories for transfer-* folders")
+                                .clicked()
+                            {
+                                self.refresh_folders();
+                            }
+                        });
+
+                        ui.add_space(4.0);
+                        ui.horizontal(|ui| {
+                            ui.label("Search 1:");
                             ui.with_layout(
                                 egui::Layout::right_to_left(egui::Align::Center),
                                 |ui| {
                                     if ui
-                                        .button("⟳ Refresh (F5)")
-                                        .on_hover_text(
-                                            "Scan search directories for transfer-* folders",
-                                        )
+                                        .button("Browse")
+                                        .on_hover_text("Pick primary Inbox directory")
                                         .clicked()
+                                    {
+                                        if let Some(folder) = rfd::FileDialog::new().pick_folder() {
+                                            self.search_dir_1 =
+                                                folder.to_string_lossy().to_string();
+                                            self.refresh_folders();
+                                        }
+                                    }
+                                    let edit_w = ui.available_width().max(60.0);
+                                    let resp = ui.add_sized(
+                                        [edit_w, 24.0],
+                                        egui::TextEdit::singleline(&mut self.search_dir_1)
+                                            .hint_text("Primary Inbox path..."),
+                                    );
+                                    if resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter))
                                     {
                                         self.refresh_folders();
                                     }
@@ -875,71 +930,62 @@ impl InboxMoverGuiApp {
                             );
                         });
 
-                        ui.add_space(4.0);
-                        ui.horizontal(|ui| {
-                            ui.label("Search 1:");
-                            let resp = ui.add(
-                                egui::TextEdit::singleline(&mut self.search_dir_1)
-                                    .hint_text("Primary Inbox path...")
-                                    .desired_width(ui.available_width() - 68.0),
-                            );
-                            if resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
-                                self.refresh_folders();
-                            }
-                            if ui
-                                .button("Browse")
-                                .on_hover_text("Pick primary Inbox directory")
-                                .clicked()
-                            {
-                                if let Some(folder) = rfd::FileDialog::new().pick_folder() {
-                                    self.search_dir_1 = folder.to_string_lossy().to_string();
-                                    self.refresh_folders();
-                                }
-                            }
-                        });
-
                         if is_advanced || !self.search_dir_2.is_empty() {
                             ui.horizontal(|ui| {
                                 ui.label("Search 2:");
-                                let resp = ui.add(
-                                    egui::TextEdit::singleline(&mut self.search_dir_2)
-                                        .hint_text("Optional secondary path...")
-                                        .desired_width(ui.available_width() - 68.0),
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        if ui
+                                            .button("Browse")
+                                            .on_hover_text(
+                                                "Pick optional secondary Inbox directory",
+                                            )
+                                            .clicked()
+                                        {
+                                            if let Some(folder) =
+                                                rfd::FileDialog::new().pick_folder()
+                                            {
+                                                self.search_dir_2 =
+                                                    folder.to_string_lossy().to_string();
+                                                self.refresh_folders();
+                                            }
+                                        }
+                                        let edit_w = ui.available_width().max(60.0);
+                                        let resp = ui.add_sized(
+                                            [edit_w, 24.0],
+                                            egui::TextEdit::singleline(&mut self.search_dir_2)
+                                                .hint_text("Optional secondary path..."),
+                                        );
+                                        if resp.lost_focus()
+                                            && ui.input(|i| i.key_pressed(Key::Enter))
+                                        {
+                                            self.refresh_folders();
+                                        }
+                                    },
                                 );
-                                if resp.lost_focus() && ui.input(|i| i.key_pressed(Key::Enter)) {
-                                    self.refresh_folders();
-                                }
-                                if ui
-                                    .button("Browse")
-                                    .on_hover_text("Pick optional secondary Inbox directory")
-                                    .clicked()
-                                {
-                                    if let Some(folder) = rfd::FileDialog::new().pick_folder() {
-                                        self.search_dir_2 = folder.to_string_lossy().to_string();
-                                        self.refresh_folders();
-                                    }
-                                }
                             });
                         }
                     });
 
                 ui.add_space(8.0);
 
-                // 3. Queue Header & Legend
-                ui.horizontal(|ui| {
-                    ui.label(
-                        RichText::new(format!("Transfer Queue ({})", self.folders.len())).strong(),
-                    );
-                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                        ui.label(
-                            RichText::new("✓ Ready   ✓(L) Logged   ✗ Setup")
-                                .small()
-                                .color(p.on_surface_variant),
-                        )
+                // 3. Queue Header & Wrapping Colored Status Legend (never cuts off!)
+                ui.label(
+                    RichText::new(format!("Transfer Queue ({})", self.folders.len())).strong(),
+                );
+                ui.horizontal_wrapped(|ui| {
+                    ui.spacing_mut().item_spacing.x = 6.0;
+                    ui.label(RichText::new("✔ Ready").small().color(p.success))
+                        .on_hover_text("✔ = Configured & ready to process");
+                    ui.label(RichText::new("•").small().color(p.on_surface_variant));
+                    ui.label(RichText::new("✔(L) Logged").small().color(p.warning))
                         .on_hover_text(
-                            "✓ = Configured & ready\n✓(L) = Contains local Process.log from a previous run\n✗ = Needs a Target Folder",
+                            "✔(L) = Contains local Process.log from a previous run",
                         );
-                    });
+                    ui.label(RichText::new("•").small().color(p.on_surface_variant));
+                    ui.label(RichText::new("✖ Setup").small().color(p.error))
+                        .on_hover_text("✖ = Needs a Target Folder before processing");
                 });
 
                 ui.add_space(4.0);
@@ -949,12 +995,16 @@ impl InboxMoverGuiApp {
                     .id_salt("transfer_queue_scroll")
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
+                        let queue_list_w = (ui.available_width() - 8.0).max(180.0);
+                        ui.set_max_width(queue_list_w);
+
                         if self.folders.is_empty() {
                             egui::Frame::none()
                                 .fill(p.surface_container)
                                 .rounding(Rounding::same(10.0))
                                 .inner_margin(Margin::same(16.0))
                                 .show(ui, |ui| {
+                                    ui.set_max_width((queue_list_w - 32.0).max(140.0));
                                     ui.label(
                                         RichText::new("No 'transfer-*' folders found.")
                                             .strong()
@@ -973,14 +1023,15 @@ impl InboxMoverGuiApp {
                         }
 
                         let mut clicked_idx: Option<(usize, bool, bool)> = None;
+                        let card_inner_w = (queue_list_w - 22.0).max(150.0);
 
                         for (idx, folder) in self.folders.iter().enumerate() {
                             let is_selected = self.selected_indices.contains(&idx);
                             let indicator = self.core.get_folder_status_indicator(folder);
 
                             let (badge_color, badge_bg) = match indicator {
-                                "✓" => (p.success, p.success_container),
-                                "✓ (L)" => (p.warning, p.warning_container),
+                                "✔" => (p.success, p.success_container),
+                                "✔ (L)" => (p.warning, p.warning_container),
                                 _ => (p.error, p.error_container),
                             };
 
@@ -1010,6 +1061,8 @@ impl InboxMoverGuiApp {
 
                             let resp = frame
                                 .show(ui, |ui| {
+                                    ui.set_min_width(card_inner_w);
+                                    ui.set_max_width(card_inner_w);
                                     ui.horizontal(|ui| {
                                         egui::Frame::none()
                                             .fill(badge_bg)
@@ -1024,11 +1077,16 @@ impl InboxMoverGuiApp {
                                                 );
                                             });
 
+                                        let text_avail = ui.available_width().max(80.0);
                                         ui.vertical(|ui| {
-                                            ui.label(
-                                                RichText::new(&folder.folder_name)
-                                                    .strong()
-                                                    .color(text_color),
+                                            ui.set_max_width(text_avail);
+                                            ui.add(
+                                                egui::Label::new(
+                                                    RichText::new(&folder.folder_name)
+                                                        .strong()
+                                                        .color(text_color),
+                                                )
+                                                .truncate(),
                                             );
                                             let sub = format!(
                                                 "{} • ID: {} • {} file(s)",
@@ -1036,18 +1094,24 @@ impl InboxMoverGuiApp {
                                                 folder.permit_id,
                                                 folder.file_list.len()
                                             );
-                                            ui.label(
-                                                RichText::new(sub).small().color(if is_selected {
-                                                    p.on_primary_container
-                                                } else {
-                                                    p.on_surface_variant
-                                                }),
+                                            ui.add(
+                                                egui::Label::new(
+                                                    RichText::new(sub).small().color(
+                                                        if is_selected {
+                                                            p.on_primary_container
+                                                        } else {
+                                                            p.on_surface_variant
+                                                        },
+                                                    ),
+                                                )
+                                                .truncate(),
                                             );
                                         });
                                     });
                                 })
                                 .response
-                                .interact(Sense::click());
+                                .interact(Sense::click())
+                                .on_hover_text(&folder.folder_name);
 
                             if resp.clicked() {
                                 let modifiers = ui.input(|i| i.modifiers);
@@ -1100,10 +1164,21 @@ impl InboxMoverGuiApp {
                     .inner_margin(Margin::symmetric(18.0, 14.0)),
             )
             .show(ctx, |ui| {
+                let outer_avail_w = ui.available_width().max(320.0);
                 egui::ScrollArea::vertical()
                     .id_salt("central_main_scroll")
                     .auto_shrink([false, false])
                     .show(ui, |ui| {
+                        // Reserve scrollbar gutter and strictly cap content width so no child row or
+                        // ComboBox can ever stretch the ScrollArea past the visible right window edge.
+                        let panel_width = (outer_avail_w - 10.0).max(300.0);
+                        ui.set_min_width(panel_width);
+                        ui.set_max_width(panel_width);
+
+                        let card_inner_w = (panel_width - 30.0).max(240.0);
+                        let dest_inner_w = (panel_width - 34.0).max(240.0);
+                        let label_col_w = (132.0 * font_scale.min(1.3)).clamp(110.0, 175.0);
+
                         let current_folder = self
                             .primary_index
                             .and_then(|idx| self.folders.get(idx))
@@ -1141,20 +1216,14 @@ impl InboxMoverGuiApp {
                                 .inner_margin(Margin::symmetric(14.0, 10.0))
                                 .stroke(Stroke::new(1.0_f32, banner_accent))
                                 .show(ui, |ui| {
+                                    ui.set_min_width(card_inner_w);
+                                    ui.set_max_width(card_inner_w);
                                     ui.horizontal(|ui| {
-                                        ui.label(
-                                            RichText::new(format!(
-                                                "{icon} {}",
-                                                guidance.headline
-                                            ))
-                                            .strong()
-                                            .color(p.on_surface),
-                                        );
                                         ui.with_layout(
                                             egui::Layout::right_to_left(egui::Align::Center),
                                             |ui| {
                                                 if ui
-                                                    .small_button("✕ Hide Guide")
+                                                    .small_button("✖ Hide Guide")
                                                     .on_hover_text(
                                                         "Hide this guidance banner (re-enable anytime via '💡 Guide' in the top bar or Ctrl+G)",
                                                     )
@@ -1163,19 +1232,43 @@ impl InboxMoverGuiApp {
                                                     self.core.app_settings.show_guidance = false;
                                                     self.core.save_settings();
                                                 }
+                                                ui.with_layout(
+                                                    egui::Layout::left_to_right(
+                                                        egui::Align::Center,
+                                                    ),
+                                                    |ui| {
+                                                        ui.add(
+                                                            egui::Label::new(
+                                                                RichText::new(format!(
+                                                                    "{icon} {}",
+                                                                    guidance.headline
+                                                                ))
+                                                                .strong()
+                                                                .color(p.on_surface),
+                                                            )
+                                                            .wrap(),
+                                                        );
+                                                    },
+                                                );
                                             },
                                         );
                                     });
-                                    ui.label(
-                                        RichText::new(&guidance.explanation)
-                                            .small()
-                                            .color(p.on_surface),
+                                    ui.add(
+                                        egui::Label::new(
+                                            RichText::new(&guidance.explanation)
+                                                .small()
+                                                .color(p.on_surface),
+                                        )
+                                        .wrap(),
                                     );
-                                    ui.label(
-                                        RichText::new(&guidance.next_step_hint)
-                                            .small()
-                                            .strong()
-                                            .color(banner_accent),
+                                    ui.add(
+                                        egui::Label::new(
+                                            RichText::new(&guidance.next_step_hint)
+                                                .small()
+                                                .strong()
+                                                .color(banner_accent),
+                                        )
+                                        .wrap(),
                                     );
                                 });
 
@@ -1189,6 +1282,8 @@ impl InboxMoverGuiApp {
                             .inner_margin(Margin::symmetric(14.0, 10.0))
                             .stroke(Stroke::new(1.0_f32, p.outline_variant))
                             .show(ui, |ui| {
+                                ui.set_min_width(card_inner_w);
+                                ui.set_max_width(card_inner_w);
                                 ui.horizontal_wrapped(|ui| {
                                     if self.selected_indices.len() > 1 {
                                         ui.label(
@@ -1245,14 +1340,16 @@ impl InboxMoverGuiApp {
                             .inner_margin(Margin::symmetric(16.0, 14.0))
                             .stroke(Stroke::new(1.0_f32, p.outline_variant))
                             .show(ui, |ui| {
-                                ui.horizontal(|ui| {
+                                ui.set_min_width(dest_inner_w);
+                                ui.set_max_width(dest_inner_w);
+                                ui.horizontal_wrapped(|ui| {
                                     ui.label(
                                         RichText::new("🎯 Destinations & Processing Options")
                                             .strong(),
                                     );
                                     if self.is_rule_modified {
                                         ui.label(
-                                            RichText::new("● Modified (Unsaved)")
+                                            RichText::new("• Modified (Unsaved)")
                                                 .small()
                                                 .color(p.warning),
                                         )
@@ -1263,33 +1360,43 @@ impl InboxMoverGuiApp {
                                 });
                                 ui.add_space(6.0);
 
-                                // Target Folder Row
+                                // Target Folder Row (Browse anchored right so it never clips)
                                 ui.horizontal(|ui| {
                                     ui.sized_label(
-                                        140.0,
+                                        label_col_w,
                                         "Target Folder *:",
                                         "Where extracted ZIP contents and loose files are placed (Required)",
                                         &p,
                                     );
-                                    if ui
-                                        .add(
-                                            egui::TextEdit::singleline(
-                                                &mut self.active_rule.target_folder,
-                                            )
-                                            .hint_text("Required: Destination path for extracted/copied files...")
-                                            .desired_width(ui.available_width() - 80.0),
-                                        )
-                                        .changed()
-                                    {
-                                        self.check_rule_modified();
-                                    }
-                                    if ui.button("Browse").clicked() {
-                                        if let Some(dir) = rfd::FileDialog::new().pick_folder() {
-                                            self.active_rule.target_folder =
-                                                dir.to_string_lossy().to_string();
-                                            self.check_rule_modified();
-                                        }
-                                    }
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            if ui.button("Browse").clicked() {
+                                                if let Some(dir) =
+                                                    rfd::FileDialog::new().pick_folder()
+                                                {
+                                                    self.active_rule.target_folder =
+                                                        dir.to_string_lossy().to_string();
+                                                    self.check_rule_modified();
+                                                }
+                                            }
+                                            let edit_w = ui.available_width().max(80.0);
+                                            if ui
+                                                .add_sized(
+                                                    [edit_w, 24.0],
+                                                    egui::TextEdit::singleline(
+                                                        &mut self.active_rule.target_folder,
+                                                    )
+                                                    .hint_text(
+                                                        "Required: Destination path for extracted/copied files...",
+                                                    ),
+                                                )
+                                                .changed()
+                                            {
+                                                self.check_rule_modified();
+                                            }
+                                        },
+                                    );
                                 });
 
                                 // Processed Folder Row
@@ -1297,7 +1404,7 @@ impl InboxMoverGuiApp {
                                     self.active_rule.post_action == PostAction::Move;
                                 ui.horizontal(|ui| {
                                     ui.sized_label(
-                                        140.0,
+                                        label_col_w,
                                         if need_processed {
                                             "Processed Folder *:"
                                         } else {
@@ -1306,58 +1413,75 @@ impl InboxMoverGuiApp {
                                         "Where the source transfer-* folder is moved after processing (Required when After Processing = Move)",
                                         &p,
                                     );
-                                    if ui
-                                        .add(
-                                            egui::TextEdit::singleline(
-                                                &mut self.active_rule.target_zip_folder,
-                                            )
-                                            .hint_text("Archive folder for processed transfer-* packages...")
-                                            .desired_width(ui.available_width() - 80.0),
-                                        )
-                                        .changed()
-                                    {
-                                        self.check_rule_modified();
-                                    }
-                                    if ui.button("Browse").clicked() {
-                                        if let Some(dir) = rfd::FileDialog::new().pick_folder() {
-                                            self.active_rule.target_zip_folder =
-                                                dir.to_string_lossy().to_string();
-                                            self.check_rule_modified();
-                                        }
-                                    }
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            if ui.button("Browse").clicked() {
+                                                if let Some(dir) =
+                                                    rfd::FileDialog::new().pick_folder()
+                                                {
+                                                    self.active_rule.target_zip_folder =
+                                                        dir.to_string_lossy().to_string();
+                                                    self.check_rule_modified();
+                                                }
+                                            }
+                                            let edit_w = ui.available_width().max(80.0);
+                                            if ui
+                                                .add_sized(
+                                                    [edit_w, 24.0],
+                                                    egui::TextEdit::singleline(
+                                                        &mut self.active_rule.target_zip_folder,
+                                                    )
+                                                    .hint_text(
+                                                        "Archive folder for processed transfer-* packages...",
+                                                    ),
+                                                )
+                                                .changed()
+                                            {
+                                                self.check_rule_modified();
+                                            }
+                                        },
+                                    );
                                 });
 
                                 // Receipt Folder Row (Shown in Advanced Mode or if non-empty)
                                 if is_advanced || !self.active_rule.receipt_folder.is_empty() {
                                     ui.horizontal(|ui| {
                                         ui.sized_label(
-                                            140.0,
+                                            label_col_w,
                                             "Receipt Folder:",
                                             "Optional: Separate folder to store timestamped receipt*.json files. Leave blank to place inside Target Folder.",
                                             &p,
                                         );
-                                        if ui
-                                            .add(
-                                                egui::TextEdit::singleline(
-                                                    &mut self.active_rule.receipt_folder,
-                                                )
-                                                .hint_text(
-                                                    "Optional: Separate folder for receipt.json files...",
-                                                )
-                                                .desired_width(ui.available_width() - 80.0),
-                                            )
-                                            .changed()
-                                        {
-                                            self.check_rule_modified();
-                                        }
-                                        if ui.button("Browse").clicked() {
-                                            if let Some(dir) = rfd::FileDialog::new().pick_folder()
-                                            {
-                                                self.active_rule.receipt_folder =
-                                                    dir.to_string_lossy().to_string();
-                                                self.check_rule_modified();
-                                            }
-                                        }
+                                        ui.with_layout(
+                                            egui::Layout::right_to_left(egui::Align::Center),
+                                            |ui| {
+                                                if ui.button("Browse").clicked() {
+                                                    if let Some(dir) =
+                                                        rfd::FileDialog::new().pick_folder()
+                                                    {
+                                                        self.active_rule.receipt_folder =
+                                                            dir.to_string_lossy().to_string();
+                                                        self.check_rule_modified();
+                                                    }
+                                                }
+                                                let edit_w = ui.available_width().max(80.0);
+                                                if ui
+                                                    .add_sized(
+                                                        [edit_w, 24.0],
+                                                        egui::TextEdit::singleline(
+                                                            &mut self.active_rule.receipt_folder,
+                                                        )
+                                                        .hint_text(
+                                                            "Optional: Separate folder for receipt.json files...",
+                                                        ),
+                                                    )
+                                                    .changed()
+                                                {
+                                                    self.check_rule_modified();
+                                                }
+                                            },
+                                        );
                                     });
                                 }
 
@@ -1365,8 +1489,64 @@ impl InboxMoverGuiApp {
                                 ui.separator();
                                 ui.add_space(6.0);
 
-                                // Processing Options Row
-                                ui.horizontal_wrapped(|ui| {
+                                // Processing Options (Responsive so ComboBoxes never overflow right edge!)
+                                let combo_w = (172.0 * font_scale.min(1.2)).clamp(140.0, 210.0);
+                                if dest_inner_w >= 840.0 * font_scale {
+                                    ui.horizontal(|ui| {
+                                        if ui
+                                            .checkbox(
+                                                &mut self.active_rule.auto_extract,
+                                                "Auto-extract ZIP archives",
+                                            )
+                                            .on_hover_text(
+                                                "When enabled, .zip archives are extracted into Target Folder (and redundant transfer-* root directories inside the ZIP are stripped). When disabled, .zip files are copied as-is.",
+                                            )
+                                            .changed()
+                                        {
+                                            self.check_rule_modified();
+                                        }
+
+                                        ui.add_space(12.0);
+                                        ui.label(RichText::new("If File Exists:").strong());
+                                        egui::ComboBox::from_id_salt("conflict_action_combo")
+                                            .width(combo_w)
+                                            .selected_text(self.active_rule.conflict_action.label())
+                                            .show_ui(ui, |ui| {
+                                                for item in ConflictAction::ALL {
+                                                    if ui
+                                                        .selectable_value(
+                                                            &mut self.active_rule.conflict_action,
+                                                            item,
+                                                            item.label(),
+                                                        )
+                                                        .changed()
+                                                    {
+                                                        self.check_rule_modified();
+                                                    }
+                                                }
+                                            });
+
+                                        ui.add_space(12.0);
+                                        ui.label(RichText::new("After Processing:").strong());
+                                        egui::ComboBox::from_id_salt("post_action_combo")
+                                            .width(combo_w)
+                                            .selected_text(self.active_rule.post_action.label())
+                                            .show_ui(ui, |ui| {
+                                                for item in PostAction::ALL {
+                                                    if ui
+                                                        .selectable_value(
+                                                            &mut self.active_rule.post_action,
+                                                            item,
+                                                            item.label(),
+                                                        )
+                                                        .changed()
+                                                    {
+                                                        self.check_rule_modified();
+                                                    }
+                                                }
+                                            });
+                                    });
+                                } else {
                                     if ui
                                         .checkbox(
                                             &mut self.active_rule.auto_extract,
@@ -1379,56 +1559,122 @@ impl InboxMoverGuiApp {
                                     {
                                         self.check_rule_modified();
                                     }
+                                    ui.add_space(4.0);
+                                    if dest_inner_w >= 600.0 * font_scale {
+                                        ui.horizontal(|ui| {
+                                            ui.label(RichText::new("If File Exists:").strong());
+                                            egui::ComboBox::from_id_salt("conflict_action_combo")
+                                                .width(combo_w)
+                                                .selected_text(
+                                                    self.active_rule.conflict_action.label(),
+                                                )
+                                                .show_ui(ui, |ui| {
+                                                    for item in ConflictAction::ALL {
+                                                        if ui
+                                                            .selectable_value(
+                                                                &mut self
+                                                                    .active_rule
+                                                                    .conflict_action,
+                                                                item,
+                                                                item.label(),
+                                                            )
+                                                            .changed()
+                                                        {
+                                                            self.check_rule_modified();
+                                                        }
+                                                    }
+                                                });
 
-                                    ui.add_space(16.0);
-                                    ui.label(RichText::new("If File Exists:").strong());
-                                    egui::ComboBox::from_id_salt("conflict_action_combo")
-                                        .selected_text(self.active_rule.conflict_action.label())
-                                        .show_ui(ui, |ui| {
-                                            for item in ConflictAction::ALL {
-                                                if ui
-                                                    .selectable_value(
-                                                        &mut self.active_rule.conflict_action,
-                                                        item,
-                                                        item.label(),
-                                                    )
-                                                    .changed()
-                                                {
-                                                    self.check_rule_modified();
-                                                }
-                                            }
+                                            ui.add_space(12.0);
+                                            ui.label(RichText::new("After Processing:").strong());
+                                            egui::ComboBox::from_id_salt("post_action_combo")
+                                                .width(combo_w)
+                                                .selected_text(self.active_rule.post_action.label())
+                                                .show_ui(ui, |ui| {
+                                                    for item in PostAction::ALL {
+                                                        if ui
+                                                            .selectable_value(
+                                                                &mut self.active_rule.post_action,
+                                                                item,
+                                                                item.label(),
+                                                            )
+                                                            .changed()
+                                                        {
+                                                            self.check_rule_modified();
+                                                        }
+                                                    }
+                                                });
                                         });
-
-                                    ui.add_space(16.0);
-                                    ui.label(RichText::new("After Processing:").strong());
-                                    egui::ComboBox::from_id_salt("post_action_combo")
-                                        .selected_text(self.active_rule.post_action.label())
-                                        .show_ui(ui, |ui| {
-                                            for item in PostAction::ALL {
-                                                if ui
-                                                    .selectable_value(
-                                                        &mut self.active_rule.post_action,
-                                                        item,
-                                                        item.label(),
-                                                    )
-                                                    .changed()
-                                                {
-                                                    self.check_rule_modified();
-                                                }
-                                            }
+                                    } else {
+                                        ui.horizontal(|ui| {
+                                            ui.sized_label(
+                                                label_col_w,
+                                                "If File Exists:",
+                                                "How to resolve filename collisions in Target Folder",
+                                                &p,
+                                            );
+                                            egui::ComboBox::from_id_salt("conflict_action_combo")
+                                                .width(combo_w)
+                                                .selected_text(
+                                                    self.active_rule.conflict_action.label(),
+                                                )
+                                                .show_ui(ui, |ui| {
+                                                    for item in ConflictAction::ALL {
+                                                        if ui
+                                                            .selectable_value(
+                                                                &mut self
+                                                                    .active_rule
+                                                                    .conflict_action,
+                                                                item,
+                                                                item.label(),
+                                                            )
+                                                            .changed()
+                                                        {
+                                                            self.check_rule_modified();
+                                                        }
+                                                    }
+                                                });
                                         });
-                                });
+                                        ui.horizontal(|ui| {
+                                            ui.sized_label(
+                                                label_col_w,
+                                                "After Processing:",
+                                                "What happens to the source transfer-* folder after unpacking",
+                                                &p,
+                                            );
+                                            egui::ComboBox::from_id_salt("post_action_combo")
+                                                .width(combo_w)
+                                                .selected_text(self.active_rule.post_action.label())
+                                                .show_ui(ui, |ui| {
+                                                    for item in PostAction::ALL {
+                                                        if ui
+                                                            .selectable_value(
+                                                                &mut self.active_rule.post_action,
+                                                                item,
+                                                                item.label(),
+                                                            )
+                                                            .changed()
+                                                        {
+                                                            self.check_rule_modified();
+                                                        }
+                                                    }
+                                                });
+                                        });
+                                    }
+                                }
                             });
 
                         ui.add_space(12.0);
 
-                        // 4. Primary Action Bar Card
+                        // 4. Primary Action Bar Card (strictly bounded inner width so buttons wrap cleanly)
                         egui::Frame::none()
                             .fill(p.surface_container)
                             .rounding(Rounding::same(12.0))
                             .inner_margin(Margin::symmetric(14.0, 10.0))
                             .stroke(Stroke::new(1.0_f32, p.outline_variant))
                             .show(ui, |ui| {
+                                ui.set_min_width(card_inner_w);
+                                ui.set_max_width(card_inner_w);
                                 ui.horizontal_wrapped(|ui| {
                                     let count = self.selected_indices.len();
                                     let process_label = if count > 1 {
@@ -1443,7 +1689,7 @@ impl InboxMoverGuiApp {
                                             .color(p.on_primary),
                                     )
                                     .fill(p.primary)
-                                    .min_size(Vec2::new(165.0, 34.0));
+                                    .min_size(Vec2::new(0.0, 32.0));
 
                                     if ui
                                         .add_enabled(count > 0, process_btn)
@@ -1474,7 +1720,7 @@ impl InboxMoverGuiApp {
                                     } else {
                                         p.surface_container_high
                                     })
-                                    .min_size(Vec2::new(120.0, 34.0));
+                                    .min_size(Vec2::new(0.0, 32.0));
 
                                     if ui
                                         .add(save_btn)
@@ -1487,9 +1733,9 @@ impl InboxMoverGuiApp {
                                     }
 
                                     if ui
-                                        .add_sized(
-                                            [105.0, 34.0],
-                                            egui::Button::new("📂 Open (Ctrl+O)"),
+                                        .add(
+                                            egui::Button::new("📂 Open (Ctrl+O)")
+                                                .min_size(Vec2::new(0.0, 32.0)),
                                         )
                                         .on_hover_text(
                                             "Open the selected transfer folder in your system file manager",
@@ -1502,9 +1748,9 @@ impl InboxMoverGuiApp {
                                     }
 
                                     if ui
-                                        .add_sized(
-                                            [115.0, 34.0],
-                                            egui::Button::new("📜 View Log (Ctrl+L)"),
+                                        .add(
+                                            egui::Button::new("📜 View Log (Ctrl+L)")
+                                                .min_size(Vec2::new(0.0, 32.0)),
                                         )
                                         .on_hover_text(
                                             "Inspect the local Process.log or global audit history",
@@ -1516,9 +1762,9 @@ impl InboxMoverGuiApp {
 
                                     if is_advanced {
                                         if ui
-                                            .add_sized(
-                                                [125.0, 34.0],
-                                                egui::Button::new("⚙ Manage Rules"),
+                                            .add(
+                                                egui::Button::new("⚙ Manage Rules")
+                                                    .min_size(Vec2::new(0.0, 32.0)),
                                             )
                                             .on_hover_text(
                                                 "View, edit, or delete saved Config IDs and Wildcard Patterns (Ctrl+M)",
@@ -1529,9 +1775,9 @@ impl InboxMoverGuiApp {
                                         }
 
                                         if ui
-                                            .add_sized(
-                                                [125.0, 34.0],
-                                                egui::Button::new("🧾 Create Receipt"),
+                                            .add(
+                                                egui::Button::new("📋 Create Receipt")
+                                                    .min_size(Vec2::new(0.0, 32.0)),
                                             )
                                             .on_hover_text(
                                                 "Generate a standalone receipt.json file from current settings",
@@ -1560,7 +1806,7 @@ impl InboxMoverGuiApp {
                                         RichText::new("🗑 Delete").color(p.on_error_container),
                                     )
                                     .fill(p.error_container)
-                                    .min_size(Vec2::new(90.0, 34.0));
+                                    .min_size(Vec2::new(0.0, 32.0));
 
                                     if ui
                                         .add_enabled(count > 0, del_btn)
@@ -1577,13 +1823,16 @@ impl InboxMoverGuiApp {
                         ui.add_space(12.0);
 
                         // 5. Split Inspector: Package Files & Archive Tree (Left) + Receipt JSON Inspector (Right)
-                        ui.columns(2, |cols| {
+                        // Explicitly sized cards so neither column can ever clip past the right window edge.
+                        let render_files_card = |ui: &mut egui::Ui, inner_w: f32| {
                             egui::Frame::none()
                                 .fill(p.surface_container)
                                 .rounding(Rounding::same(12.0))
                                 .inner_margin(Margin::same(12.0))
                                 .stroke(Stroke::new(1.0_f32, p.outline_variant))
-                                .show(&mut cols[0], |ui| {
+                                .show(ui, |ui| {
+                                    ui.set_min_width(inner_w);
+                                    ui.set_max_width(inner_w);
                                     ui.label(
                                         RichText::new("📦 Package Files & ZIP Contents").strong(),
                                     );
@@ -1593,61 +1842,80 @@ impl InboxMoverGuiApp {
                                         .max_height(260.0)
                                         .auto_shrink([false, false])
                                         .show(ui, |ui| {
+                                            let scroll_w = (inner_w - 6.0).max(120.0);
+                                            ui.set_max_width(scroll_w);
                                             if let Some(ref f) = current_folder {
                                                 if f.file_list.is_empty() {
-                                                    ui.label(
-                                                        RichText::new("Folder is empty.")
-                                                            .color(p.on_surface_variant),
+                                                    ui.add(
+                                                        egui::Label::new(
+                                                            RichText::new("Folder is empty.")
+                                                                .color(p.on_surface_variant),
+                                                        )
+                                                        .wrap(),
                                                     );
                                                 } else {
                                                     for item in &f.file_list {
                                                         let is_zip =
                                                             item.to_lowercase().ends_with(".zip");
-                                                        ui.label(
-                                                            RichText::new(item)
-                                                                .monospace()
-                                                                .small()
-                                                                .color(if is_zip {
-                                                                    p.primary
-                                                                } else {
-                                                                    p.on_surface
-                                                                }),
+                                                        ui.add(
+                                                            egui::Label::new(
+                                                                RichText::new(item)
+                                                                    .monospace()
+                                                                    .small()
+                                                                    .color(if is_zip {
+                                                                        p.primary
+                                                                    } else {
+                                                                        p.on_surface
+                                                                    }),
+                                                            )
+                                                            .wrap(),
                                                         );
                                                         if is_zip {
                                                             for zc in &f.zip_contents {
-                                                                ui.label(
-                                                                    RichText::new(format!(
-                                                                        "  └─ {zc}"
-                                                                    ))
-                                                                    .monospace()
-                                                                    .small()
-                                                                    .color(p.on_surface_variant),
+                                                                ui.add(
+                                                                    egui::Label::new(
+                                                                        RichText::new(format!(
+                                                                            "  └─ {zc}"
+                                                                        ))
+                                                                        .monospace()
+                                                                        .small()
+                                                                        .color(
+                                                                            p.on_surface_variant,
+                                                                        ),
+                                                                    )
+                                                                    .wrap(),
                                                                 );
                                                             }
                                                         }
                                                     }
                                                 }
                                             } else {
-                                                ui.label(
-                                                    RichText::new(
-                                                        "Select a transfer folder to inspect its contents.",
+                                                ui.add(
+                                                    egui::Label::new(
+                                                        RichText::new(
+                                                            "Select a transfer folder to inspect its contents.",
+                                                        )
+                                                        .color(p.on_surface_variant),
                                                     )
-                                                    .color(p.on_surface_variant),
+                                                    .wrap(),
                                                 );
                                             }
                                         });
                                 });
+                        };
 
-                            // Right Column: Receipt JSON Inspector
+                        let render_receipt_card = |ui: &mut egui::Ui, inner_w: f32| {
                             egui::Frame::none()
                                 .fill(p.surface_container)
                                 .rounding(Rounding::same(12.0))
                                 .inner_margin(Margin::same(12.0))
                                 .stroke(Stroke::new(1.0_f32, p.outline_variant))
-                                .show(&mut cols[1], |ui| {
-                                    ui.horizontal(|ui| {
+                                .show(ui, |ui| {
+                                    ui.set_min_width(inner_w);
+                                    ui.set_max_width(inner_w);
+                                    ui.horizontal_wrapped(|ui| {
                                         ui.label(
-                                            RichText::new("🧾 Receipt JSON Inspector").strong(),
+                                            RichText::new("📋 Receipt JSON Inspector").strong(),
                                         );
                                         if let Some(ref f) = current_folder {
                                             if f.receipt_warning.is_some() {
@@ -1666,32 +1934,58 @@ impl InboxMoverGuiApp {
                                         .max_height(260.0)
                                         .auto_shrink([false, false])
                                         .show(ui, |ui| {
+                                            let scroll_w = (inner_w - 6.0).max(120.0);
+                                            ui.set_max_width(scroll_w);
                                             if let Some(ref f) = current_folder {
                                                 if !f.receipt_raw.trim().is_empty() {
-                                                    ui.label(
-                                                        RichText::new(&f.receipt_raw)
-                                                            .monospace()
-                                                            .small()
-                                                            .color(p.on_surface),
+                                                    ui.add(
+                                                        egui::Label::new(
+                                                            RichText::new(&f.receipt_raw)
+                                                                .monospace()
+                                                                .small()
+                                                                .color(p.on_surface),
+                                                        )
+                                                        .wrap(),
                                                     );
                                                 } else {
-                                                    ui.label(
-                                                        RichText::new(
-                                                            "No receipt.json found in this transfer folder (Config ID: DEFAULT/No_ID).\n\nTip: You can automate transfers without receipts by saving a Wildcard Pattern rule!",
+                                                    ui.add(
+                                                        egui::Label::new(
+                                                            RichText::new(
+                                                                "No receipt.json found in this transfer folder (Config ID: DEFAULT/No_ID).\n\nTip: You can automate transfers without receipts by saving a Wildcard Pattern rule!",
+                                                            )
+                                                            .small()
+                                                            .color(p.on_surface_variant),
                                                         )
-                                                        .small()
-                                                        .color(p.on_surface_variant),
+                                                        .wrap(),
                                                     );
                                                 }
                                             } else {
-                                                ui.label(
-                                                    RichText::new("No folder selected.")
-                                                        .color(p.on_surface_variant),
+                                                ui.add(
+                                                    egui::Label::new(
+                                                        RichText::new("No folder selected.")
+                                                            .color(p.on_surface_variant),
+                                                    )
+                                                    .wrap(),
                                                 );
                                             }
                                         });
                                 });
-                        });
+                        };
+
+                        let col_gap = 12.0;
+                        if panel_width >= 580.0 {
+                            let col_inner_w = ((panel_width - col_gap) * 0.5 - 26.0).max(160.0);
+                            ui.horizontal_top(|ui| {
+                                ui.spacing_mut().item_spacing.x = col_gap;
+                                render_files_card(ui, col_inner_w);
+                                render_receipt_card(ui, col_inner_w);
+                            });
+                        } else {
+                            let full_insp_inner_w = (panel_width - 26.0).max(200.0);
+                            render_files_card(ui, full_insp_inner_w);
+                            ui.add_space(10.0);
+                            render_receipt_card(ui, full_insp_inner_w);
+                        }
                     });
             });
 
@@ -1852,7 +2146,7 @@ impl InboxMoverGuiApp {
                         );
 
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.button("✕ Close (Esc)").clicked() {
+                            if ui.button("✖ Close (Esc)").clicked() {
                                 self.show_help_modal = false;
                             }
                         });
@@ -2087,7 +2381,7 @@ impl InboxMoverGuiApp {
                             format!("✳ Wildcard Patterns ({})", self.core.patterns_cache.len()),
                         );
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.button("✕ Close").clicked() {
+                            if ui.button("✖ Close").clicked() {
                                 self.show_manage_rules_modal = false;
                             }
                         });
@@ -2224,7 +2518,7 @@ impl InboxMoverGuiApp {
 
         // 5. Workspace Sync / Merge Modal
         if self.show_sync_modal {
-            egui::Window::new("⇄ Sync / Merge Workspaces")
+            egui::Window::new("⟳ Sync / Merge Workspaces")
                 .collapsible(false)
                 .resizable(false)
                 .anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO)
@@ -2236,7 +2530,7 @@ impl InboxMoverGuiApp {
                     ui.label("Merge all local Personal Config IDs and Patterns into the Team Workspace directory:");
                     ui.add_space(10.0);
                     ui.horizontal(|ui| {
-                        if ui.button("⇄ Merge Local -> Team").clicked() {
+                        if ui.button("⟳ Merge Local -> Team").clicked() {
                             self.core.app_settings.use_global = true;
                             self.core.save_settings();
                             match self.core.merge_local_into_team() {
@@ -2261,7 +2555,7 @@ impl InboxMoverGuiApp {
 
         // 6. Create Receipt Modal
         if self.show_create_receipt_modal {
-            egui::Window::new("🧾 Create Custom receipt.json")
+            egui::Window::new("📋 Create Custom receipt.json")
                 .collapsible(false)
                 .resizable(false)
                 .anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO)
@@ -2338,7 +2632,7 @@ impl InboxMoverGuiApp {
                             format!("🌍 Global History ({})", self.global_logs.len()),
                         );
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
-                            if ui.button("✕ Close").clicked() {
+                            if ui.button("✖ Close").clicked() {
                                 self.show_log_modal = false;
                             }
                         });
@@ -2535,7 +2829,10 @@ pub fn run_gui(core: InboxMoverCore) -> Result<(), String> {
 
     let make_options = |renderer: eframe::Renderer| eframe::NativeOptions {
         viewport: egui::ViewportBuilder::default()
-            .with_title("Inbox Mover — Transfer Folder Processor")
+            .with_title(format!(
+                "Inbox Mover v{} — Transfer Folder Processor",
+                env!("CARGO_PKG_VERSION")
+            ))
             .with_inner_size([1240.0, 800.0])
             .with_min_inner_size([920.0, 620.0]),
         renderer,

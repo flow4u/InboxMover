@@ -55,6 +55,7 @@ process_log.jsonl
 Process.log
 Inbox Process.log
 transfer-*/
+/bin/**/permit_configs/
 
 # =============================================================================
 # IDEs, Editors & OS Metadata

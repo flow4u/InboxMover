@@ -132,19 +132,19 @@ impl InboxMoverCore {
 
     pub fn get_folder_status_indicator(&self, folder: &FolderData) -> &'static str {
         if !folder.can_process {
-            return "✗";
+            return "✖";
         }
         let (rule, _, _, _) = self.resolve_effective_config(folder);
         if rule.target_folder.trim().is_empty() {
-            return "✗";
+            return "✖";
         }
         if rule.post_action == PostAction::Move && rule.target_zip_folder.trim().is_empty() {
-            return "✗";
+            return "✖";
         }
         if folder.has_log {
-            "✓ (L)"
+            "✔ (L)"
         } else {
-            "✓"
+            "✔"
         }
     }
 

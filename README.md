@@ -1,4 +1,4 @@
-# **Inbox Mover (v0.18)**
+# **Inbox Mover (v0.20.0)**
 
 **Inbox Mover** is a cross-platform utility designed to process files in the **transfer-** folders found in **i:** and **z:\\inbox** on [**myDRE**](https://mydre.org)**.** 
 

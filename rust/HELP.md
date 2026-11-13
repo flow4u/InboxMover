@@ -35,10 +35,10 @@ When incoming data arrives in your Inbox directory, it is packaged inside folder
    - **GUI**: Click **Browse** next to `Search 1` (top-left) and choose the directory where `transfer-*` folders arrive.
    - **TUI**: Press `/` and type or paste your Inbox directory path, then press `Enter`.
 2. **Select a Transfer Folder**:
-   - Click a folder in the **Transfer Queue** on the left (or use `↑` / `↓` arrow keys).
+   - Click a folder in the **Transfer Queue** on the left (or use `Up` / `Down` arrow keys).
    - Look at the **Smart Guidance Banner** at the top of the right panel — it tells you in plain English whether the folder is ready or what setting is missing.
 3. **Configure & Process**:
-   - If the folder shows **`[✗]`**, set a **Target Folder** (where extracted/copied files should go) and click **Save Rule** (`Ctrl+S` in GUI, `s` in TUI) so Inbox Mover remembers it next time.
+   - If the folder shows **`[✖]`**, set a **Target Folder** (where extracted/copied files should go) and click **Save Rule** (`Ctrl+S` in GUI, `s` in TUI) so Inbox Mover remembers it next time.
    - Click **▶ Process Folder** (or press `Enter`).
 
 ---
@@ -62,14 +62,14 @@ Inbox Mover is designed so **first-time users never feel overwhelmed** and **dai
 
 Every `transfer-*` folder found in `Search 1` and `Search 2` (scanned up to 2 directory levels deep) is listed in the **Transfer Queue** with one of three status badges:
 
-- **`[✓]` Ready (Green)**:
+- **`[✔]` Ready (Green)**:
   - The folder contains valid files and has a complete destination configuration (either from a `receipt.json`, a saved Config ID, a matching Wildcard Pattern, or your `DEFAULT` rule).
   - You can process it immediately with a single click or `Enter`.
-- **`[✓ (L)]` Previously Processed (Amber)**:
+- **`[✔ (L)]` Previously Processed (Amber)**:
   - A local `Process.log` file was found inside this `transfer-*` folder.
   - This happens when the folder was previously processed with **After Processing** set to **Leave in Inbox**.
   - You can inspect its previous run via **View Log** (`Ctrl+L` / `l`) or process it again if needed.
-- **`[✗]` Needs Setup / Attention (Red)**:
+- **`[✖]` Needs Setup / Attention (Red)**:
   - Either no **Target Folder** is configured yet, **After Processing** is set to *Move* without a **Processed Folder**, or the folder contains no valid processable files.
 
 ### Multi-Select Batch Processing
@@ -102,7 +102,7 @@ Every `transfer-*` folder found in `Search 1` and `Search 2` (scanned up to 2 di
 - **After Processing (Post-Action)**:
   - **Move to Processed**: Moves the source `transfer-*` folder into your **Processed Folder** (appending `_1`, `_2` if a folder of the same name already exists there).
   - **Delete Source**: Permanently deletes the source `transfer-*` folder after successful extraction/copying.
-  - **Leave in Inbox**: Leaves the `transfer-*` folder untouched in the Inbox and writes `Process.log` inside it (marking it `✓ (L)`).
+  - **Leave in Inbox**: Leaves the `transfer-*` folder untouched in the Inbox and writes `Process.log` inside it (marking it `✔ (L)`).
 
 ---
 
@@ -114,7 +114,7 @@ Incoming transfers can include a `receipt.json` (or `receipt_*.json`) either dir
 
 #### Standard Mode (`Overrule receipt.json` is UNCHECKED)
 1. **Receipt Overrides**: Any paths or options explicitly defined inside `receipt.json` (`target_folder`, `process_folder`, `receipt_folder`, `auto_extract`, `conflict_resolution`, `post_processing`) are applied on top of your base rule.
-   - If the receipt's paths differ from your saved rule, Inbox Mover highlights **`● Modified`** and **`Save Rule *`** so you can see that the receipt customized the settings.
+   - If the receipt's paths differ from your saved rule, Inbox Mover highlights **`• Modified`** and **`Save Rule *`** so you can see that the receipt customized the settings.
 2. **Saved Config ID (`<permitId>.json`)**: Matched using `permitId` (or `id` / `configId`) from `receipt.json`.
 3. **Saved Wildcard Pattern (`patterns.json`)**: Evaluated in order against the folder name, loose files, and filenames inside ZIP archives.
 4. **Workspace `DEFAULT.json`**: Global fallback rule when no specific ID or pattern matches.
@@ -149,7 +149,7 @@ All rules are stored as clean, human-readable JSON files inside `permit_configs/
 - `permit_configs/team/` — Shared team configurations.
 
 ### Syncing Rules Between Personal & Team
-In **Advanced Mode**, click **⇄ Sync** next to the Workspace selector in the left sidebar:
+In **Advanced Mode**, click **⟳ Sync** next to the Workspace selector in the left sidebar:
 - Copy **all rules and patterns** from Personal → Team (or Team → Personal).
 - Or copy a **single specific Config ID or Pattern** to share a newly created workflow with your colleagues.
 
@@ -190,7 +190,7 @@ The GUI and TUI share the same mental model and shortcut structure so you can sw
 
 | Action | GUI Shortcut (Windows & Linux) | TUI Shortcut (Linux Terminal) |
 | :--- | :--- | :--- |
-| **Navigate Transfer Queue** | `↑` / `↓` | `↑` / `↓` or `j` / `k` |
+| **Navigate Transfer Queue** | `Up` / `Down` | `Up` / `Down` or `j` / `k` |
 | **Multi-Select Folders (Batch)** | `Ctrl+Click` / `Shift+Click` | `Space` |
 | **Process Selected Folder(s)** | `Enter` | `Enter` or `p` |
 | **Save Current Rule** | `Ctrl+S` | `s` |
@@ -219,7 +219,7 @@ The GUI and TUI share the same mental model and shortcut structure so you can sw
 Automate Inbox Mover in scripts, task schedulers, or cron jobs using `--cli`:
 
 ```bash
-# 1. Process all ready (✓) transfer-* folders in a directory (oldest to newest):
+# 1. Process all ready (✔) transfer-* folders in a directory (oldest to newest):
 inbox-mover-rust --cli --dir /mnt/inbox
 
 # 2. Scan two directories using Team workspace rules and overrule receipt.json:
@@ -233,9 +233,9 @@ inbox-mover-rust --cli --folder /mnt/inbox/transfer-2026-04-survey
 
 ## 🛠 12. Troubleshooting & FAQ
 
-- **Q: Why does a folder show `[✗]` in the queue?**
+- **Q: Why does a folder show `[✖]` in the queue?**
   - **A:** Either the **Target Folder** is blank, or **After Processing** is set to *Move to Processed* while **Processed Folder** is blank, or the folder is empty. Select the folder and read the **Smart Guidance Banner** at the top of the right panel for the exact cause.
-- **Q: Why does the Save button say `Save Rule *` with a `● Modified` badge?**
+- **Q: Why does the Save button say `Save Rule *` with a `• Modified` badge?**
   - **A:** The active settings in the right panel differ from your saved rule in `permit_configs/`. This happens either because you edited a path/option in the UI, or because an incoming `receipt.json` overrode your saved rule. Click `Save Rule *` (`Ctrl+S` / `s`) if you want to make those changes permanent.
 - **Q: I'm an advanced user and don't want any help banners on screen. How do I turn them off permanently?**
   - **A:** Click **`💡 Guide: ON`** in the top bar (or press `Ctrl+G` in GUI / `g` in TUI) to switch it to **`💡 Guide: OFF`**. Your choice is saved immediately to `permit_configs/settings.json`.
