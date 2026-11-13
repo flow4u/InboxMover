@@ -1,4 +1,4 @@
-# <img src="./assets/inbox_mover.svg" alt="Inbox Mover Icon" width="40" align="top" /> **Inbox Mover (v0.21.2)**
+# <img src="./assets/inbox_mover.svg" alt="Inbox Mover Icon" width="40" align="top" /> **Inbox Mover (v0.21.3)**
 
 **Inbox Mover** is a cross-platform utility designed to process files in the **transfer-** folders found in **i:** and **z:\\inbox** on [**myDRE**](https://mydre.org)**.** 
 

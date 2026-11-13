@@ -2,7 +2,6 @@ use std::collections::BTreeSet;
 use std::io;
 use std::path::PathBuf;
 use std::sync::{Arc, Mutex};
-use std::time::Duration;
 
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
@@ -1654,10 +1653,10 @@ pub fn run_tui(core: InboxMoverCore) -> Result<(), String> {
     let res = (|| -> io::Result<()> {
         while !app.should_quit {
             terminal.draw(|f| app.draw(f))?;
-            if event::poll(Duration::from_millis(100))? {
-                if let Event::Key(key) = event::read()? {
-                    app.handle_key(key);
-                }
+            match event::read()? {
+                Event::Key(key) => app.handle_key(key),
+                Event::Resize(_, _) => {}
+                _ => continue,
             }
         }
         Ok(())

@@ -171,6 +171,7 @@ pub struct InboxMoverGuiApp {
     password_input: String,
 
     app_icon_tex: Option<egui::TextureHandle>,
+    applied_theme_state: Option<(bool, u32)>,
 }
 
 impl InboxMoverGuiApp {
@@ -224,6 +225,7 @@ impl InboxMoverGuiApp {
             password_zip_name: String::new(),
             password_input: String::new(),
             app_icon_tex: None,
+            applied_theme_state: None,
         };
 
         app.apply_theme(ctx);
@@ -265,7 +267,7 @@ impl InboxMoverGuiApp {
         }
     }
 
-    fn apply_theme(&self, ctx: &egui::Context) {
+    fn apply_theme(&mut self, ctx: &egui::Context) {
         let p = self.palette();
         let theme = if self.core.app_settings.dark_mode {
             egui::Theme::Dark
@@ -329,6 +331,10 @@ impl InboxMoverGuiApp {
         }
         ctx.set_style_of(egui::Theme::Dark, style.clone());
         ctx.set_style_of(egui::Theme::Light, style);
+        self.applied_theme_state = Some((
+            self.core.app_settings.dark_mode,
+            self.core.app_settings.font_size,
+        ));
     }
 
     pub fn refresh_folders(&mut self) {
@@ -597,7 +603,13 @@ impl InboxMoverGuiApp {
     }
 
     pub fn render_ui(&mut self, ctx: &egui::Context) {
-        self.apply_theme(ctx);
+        let desired_theme_state = (
+            self.core.app_settings.dark_mode,
+            self.core.app_settings.font_size,
+        );
+        if self.applied_theme_state != Some(desired_theme_state) {
+            self.apply_theme(ctx);
+        }
         self.handle_keyboard_shortcuts(ctx);
         let p = self.palette();
         let is_advanced = !self.core.app_settings.simple_mode;

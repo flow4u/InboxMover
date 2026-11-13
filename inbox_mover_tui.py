@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Inbox Mover TUI v0.21.2
+Inbox Mover TUI v0.21.3
 A TUI conversion of the Inbox Mover utility.
 Runs on standard Python libraries (uses curses for the interface).
 
@@ -23,7 +23,7 @@ import fnmatch
 import curses
 import textwrap
 
-VERSION = "0.21.2 (TUI)"
+VERSION = "0.21.3 (TUI)"
 
 # --------------------------------------------------------------------------- #
 # CORE LOGIC (Preserved from original)

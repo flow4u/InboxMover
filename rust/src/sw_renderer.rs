@@ -270,6 +270,70 @@ impl SoftwareRasterizer {
             let c1 = v1.color.to_array();
             let c2 = v2.color.to_array();
 
+            if is_white_uv && is_uniform_color {
+                let sa = c0[3];
+                if sa == 255 {
+                    let packed =
+                        ((c0[0] as u32) << 16) | ((c0[1] as u32) << 8) | (c0[2] as u32);
+                    for py in min_y..max_y {
+                        let mut w0 = w0_row;
+                        let mut w1 = w1_row;
+                        let mut w2 = w2_row;
+                        let row_offset = (py as usize) * self.width;
+                        let mut entered = false;
+                        for px in min_x..max_x {
+                            if w0 >= -1e-4 && w1 >= -1e-4 && w2 >= -1e-4 {
+                                entered = true;
+                                self.fb[row_offset + px as usize] = packed;
+                            } else if entered {
+                                break;
+                            }
+                            w0 += dw0_dx;
+                            w1 += dw1_dx;
+                            w2 += dw2_dx;
+                        }
+                        w0_row += dw0_dy;
+                        w1_row += dw1_dy;
+                        w2_row += dw2_dy;
+                    }
+                } else if sa > 0 {
+                    let sr = c0[0] as u32;
+                    let sg = c0[1] as u32;
+                    let sb = c0[2] as u32;
+                    let inv_a = (255 - sa) as u32;
+                    for py in min_y..max_y {
+                        let mut w0 = w0_row;
+                        let mut w1 = w1_row;
+                        let mut w2 = w2_row;
+                        let row_offset = (py as usize) * self.width;
+                        let mut entered = false;
+                        for px in min_x..max_x {
+                            if w0 >= -1e-4 && w1 >= -1e-4 && w2 >= -1e-4 {
+                                entered = true;
+                                let dst = self.fb[row_offset + px as usize];
+                                let dr = (dst >> 16) & 0xFF;
+                                let dg = (dst >> 8) & 0xFF;
+                                let db = dst & 0xFF;
+                                let out_r = (sr + ((dr * inv_a + 127) / 255)).min(255);
+                                let out_g = (sg + ((dg * inv_a + 127) / 255)).min(255);
+                                let out_b = (sb + ((db * inv_a + 127) / 255)).min(255);
+                                self.fb[row_offset + px as usize] =
+                                    (out_r << 16) | (out_g << 8) | out_b;
+                            } else if entered {
+                                break;
+                            }
+                            w0 += dw0_dx;
+                            w1 += dw1_dx;
+                            w2 += dw2_dx;
+                        }
+                        w0_row += dw0_dy;
+                        w1_row += dw1_dy;
+                        w2_row += dw2_dy;
+                    }
+                }
+                continue;
+            }
+
             for py in min_y..max_y {
                 let mut w0 = w0_row;
                 let mut w1 = w1_row;
@@ -469,6 +533,14 @@ mod win32_gdi {
     }
 }
 
+#[derive(Clone, Copy, Debug)]
+struct SwRepaintEvent {
+    when: Instant,
+    cumulative_pass_nr: u64,
+}
+
+const MIN_FRAME_INTERVAL: Duration = Duration::from_millis(16);
+
 struct SwWinitHandler {
     egui_ctx: egui::Context,
     app: InboxMoverGuiApp,
@@ -476,10 +548,38 @@ struct SwWinitHandler {
     egui_state: Option<egui_winit::State>,
     rasterizer: SoftwareRasterizer,
     next_repaint_time: Option<Instant>,
+    last_render_time: Option<Instant>,
+    redraw_queued: bool,
 }
 
 impl SwWinitHandler {
+    fn schedule_repaint_at(&mut self, target: Instant) {
+        if self.redraw_queued {
+            return;
+        }
+        let effective_target = if let Some(last) = self.last_render_time {
+            target.max(last + MIN_FRAME_INTERVAL)
+        } else {
+            target
+        };
+        let now = Instant::now();
+        if effective_target <= now {
+            if let Some(window) = &self.window {
+                self.redraw_queued = true;
+                self.next_repaint_time = None;
+                window.request_redraw();
+            }
+        } else {
+            self.next_repaint_time = Some(match self.next_repaint_time {
+                Some(existing) => existing.min(effective_target),
+                None => effective_target,
+            });
+        }
+    }
+
     fn render_and_present(&mut self, event_loop: &ActiveEventLoop) {
+        self.redraw_queued = false;
+
         let (Some(window), Some(egui_state)) = (self.window.as_ref(), self.egui_state.as_mut())
         else {
             return;
@@ -490,6 +590,9 @@ impl SwWinitHandler {
             return;
         }
 
+        let frame_start = Instant::now();
+        self.last_render_time = Some(frame_start);
+
         let raw_input = egui_state.take_egui_input(window);
         let full_output = self.egui_ctx.run(raw_input, |ctx| {
             self.app.render_ui(ctx);
@@ -498,19 +601,15 @@ impl SwWinitHandler {
         egui_state.handle_platform_output(window, full_output.platform_output);
 
         let mut should_close = false;
+        let mut desired_repaint: Option<Duration> = None;
         if let Some(vp_out) = full_output.viewport_output.get(&ViewportId::ROOT) {
             for cmd in &vp_out.commands {
                 if matches!(cmd, ViewportCommand::Close) {
                     should_close = true;
                 }
             }
-            if vp_out.repaint_delay.is_zero() {
-                window.request_redraw();
-                self.next_repaint_time = None;
-            } else if vp_out.repaint_delay < Duration::from_secs(3600) {
-                self.next_repaint_time = Some(Instant::now() + vp_out.repaint_delay);
-            } else {
-                self.next_repaint_time = None;
+            if vp_out.repaint_delay < Duration::from_secs(3600) {
+                desired_repaint = Some(vp_out.repaint_delay);
             }
         }
 
@@ -535,16 +634,27 @@ impl SwWinitHandler {
         );
 
         #[cfg(target_os = "windows")]
-        win32_gdi::present_frame(
-            window,
-            &self.rasterizer.fb,
-            size.width as usize,
-            size.height as usize,
-        );
+        if let Some(window) = &self.window {
+            win32_gdi::present_frame(
+                window,
+                &self.rasterizer.fb,
+                size.width as usize,
+                size.height as usize,
+            );
+        }
+
+        if let Some(delay) = desired_repaint {
+            let target = Instant::now()
+                .checked_add(delay)
+                .unwrap_or_else(|| Instant::now() + Duration::from_secs(3600));
+            self.schedule_repaint_at(target);
+        } else {
+            self.next_repaint_time = None;
+        }
     }
 }
 
-impl ApplicationHandler<()> for SwWinitHandler {
+impl ApplicationHandler<SwRepaintEvent> for SwWinitHandler {
     fn resumed(&mut self, event_loop: &ActiveEventLoop) {
         if self.window.is_some() {
             return;
@@ -570,16 +680,20 @@ impl ApplicationHandler<()> for SwWinitHandler {
                 None,
                 Some(4096),
             );
+            self.redraw_queued = true;
             win.request_redraw();
             self.window = Some(win);
             self.egui_state = Some(state);
         }
     }
 
-    fn user_event(&mut self, _event_loop: &ActiveEventLoop, _event: ()) {
-        if let Some(window) = &self.window {
-            window.request_redraw();
+    fn user_event(&mut self, _event_loop: &ActiveEventLoop, event: SwRepaintEvent) {
+        let current_pass = self.egui_ctx.cumulative_pass_nr_for(ViewportId::ROOT);
+        // Ignore outdated repaint events whose target pass has already completed
+        if current_pass > event.cumulative_pass_nr + 1 {
+            return;
         }
+        self.schedule_repaint_at(event.when);
     }
 
     fn window_event(
@@ -588,11 +702,10 @@ impl ApplicationHandler<()> for SwWinitHandler {
         _window_id: WindowId,
         event: WindowEvent,
     ) {
+        let mut wants_repaint = false;
         if let (Some(window), Some(egui_state)) = (self.window.as_ref(), self.egui_state.as_mut()) {
             let response = egui_state.on_window_event(window, &event);
-            if response.repaint {
-                window.request_redraw();
-            }
+            wants_repaint = response.repaint;
         }
 
         match event {
@@ -602,17 +715,27 @@ impl ApplicationHandler<()> for SwWinitHandler {
             WindowEvent::Resized(_) | WindowEvent::RedrawRequested => {
                 self.render_and_present(event_loop);
             }
-            _ => {}
+            _ => {
+                if wants_repaint {
+                    self.schedule_repaint_at(Instant::now());
+                }
+            }
         }
     }
 
     fn about_to_wait(&mut self, event_loop: &ActiveEventLoop) {
+        if self.redraw_queued {
+            event_loop.set_control_flow(ControlFlow::Wait);
+            return;
+        }
         if let Some(deadline) = self.next_repaint_time {
             if Instant::now() >= deadline {
                 self.next_repaint_time = None;
                 if let Some(window) = &self.window {
+                    self.redraw_queued = true;
                     window.request_redraw();
                 }
+                event_loop.set_control_flow(ControlFlow::Wait);
             } else {
                 event_loop.set_control_flow(ControlFlow::WaitUntil(deadline));
             }
@@ -628,13 +751,23 @@ pub fn run_software_gui(core: InboxMoverCore) -> Result<(), String> {
     let egui_ctx = egui::Context::default();
     let app = InboxMoverGuiApp::new_with_ctx(&egui_ctx, core);
 
-    let event_loop = EventLoop::<()>::with_user_event()
+    let event_loop = EventLoop::<SwRepaintEvent>::with_user_event()
         .build()
         .map_err(|e| format!("Failed to create software GUI event loop: {e}"))?;
 
     let proxy = event_loop.create_proxy();
-    egui_ctx.set_request_repaint_callback(move |_info| {
-        let _ = proxy.send_event(());
+    egui_ctx.set_request_repaint_callback(move |info| {
+        if info.viewport_id != ViewportId::ROOT || info.delay >= Duration::from_secs(3600) {
+            return;
+        }
+        let now = Instant::now();
+        let when = now
+            .checked_add(info.delay)
+            .unwrap_or_else(|| now + Duration::from_secs(3600));
+        let _ = proxy.send_event(SwRepaintEvent {
+            when,
+            cumulative_pass_nr: info.current_cumulative_pass_nr,
+        });
     });
 
     let mut handler = SwWinitHandler {
@@ -644,6 +777,8 @@ pub fn run_software_gui(core: InboxMoverCore) -> Result<(), String> {
         egui_state: None,
         rasterizer: SoftwareRasterizer::new(),
         next_repaint_time: None,
+        last_render_time: None,
+        redraw_queued: false,
     };
 
     event_loop
@@ -794,6 +929,68 @@ mod tests {
                 }
             }
         }
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
+
+    #[test]
+    fn test_idle_gui_requests_no_immediate_repaint() {
+        let temp_dir = std::env::temp_dir().join("inbox_mover_sw_idle_test");
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let mut core = InboxMoverCore::with_base_dir(&temp_dir);
+        core.app_settings.show_welcome_splash = false;
+
+        let ctx = egui::Context::default();
+        let scheduled_delays: Arc<std::sync::Mutex<Vec<Duration>>> =
+            Arc::new(std::sync::Mutex::new(Vec::new()));
+        let delays_clone = Arc::clone(&scheduled_delays);
+        ctx.set_request_repaint_callback(move |info| {
+            if let Ok(mut guard) = delays_clone.lock() {
+                guard.push(info.delay);
+            }
+        });
+
+        let mut app = InboxMoverGuiApp::new_with_ctx(&ctx, core);
+
+        // Run 3 passes with static screen rect and zero user events so layout settles
+        let mut last_delay = Duration::ZERO;
+        for _ in 0..3 {
+            let mut raw = egui::RawInput::default();
+            raw.screen_rect = Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(1240.0, 800.0)));
+            let out = ctx.run(raw, |ctx| {
+                app.render_ui(ctx);
+            });
+            last_delay = out.viewport_output[&ViewportId::ROOT].repaint_delay;
+        }
+
+        assert!(
+            last_delay >= Duration::from_secs(3600),
+            "Expected idle GUI to sleep indefinitely (repaint_delay >= 3600s), got {:?}",
+            last_delay
+        );
+
+        // Simulate a blinking text cursor / hover timer requesting a 500ms delayed repaint
+        if let Ok(mut guard) = scheduled_delays.lock() {
+            guard.clear();
+        }
+        let mut raw = egui::RawInput::default();
+        raw.screen_rect = Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(1240.0, 800.0)));
+        let out = ctx.run(raw, |ctx| {
+            app.render_ui(ctx);
+            ctx.request_repaint_after(Duration::from_millis(500));
+        });
+        let vp_delay = out.viewport_output[&ViewportId::ROOT].repaint_delay;
+        assert!(
+            vp_delay >= Duration::from_millis(450) && vp_delay <= Duration::from_millis(550),
+            "Expected 500ms delayed repaint, got {:?}",
+            vp_delay
+        );
+        let cb_delays = scheduled_delays.lock().unwrap().clone();
+        assert!(
+            cb_delays.iter().all(|d| *d >= Duration::from_millis(450)),
+            "Expected repaint callback to report >=450ms delay (no 0ms busy spin), got {:?}",
+            cb_delays
+        );
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
