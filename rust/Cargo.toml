@@ -32,7 +32,7 @@ serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
 
 # Files, Archives & Paths
-zip = { version = "2.2", default-features = false, features = ["deflate", "bzip2", "time"] }
+zip = { version = "9.0", default-features = false, features = ["deflate", "bzip2", "time"] }
 walkdir = "2.5"
 glob = "0.3"
 rfd = "0.15"
