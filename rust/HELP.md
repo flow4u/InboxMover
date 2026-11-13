@@ -240,6 +240,24 @@ inbox-mover-rust --cli --folder /mnt/inbox/transfer-2026-04-survey
 
 ## 🛠 12. Troubleshooting & FAQ
 
+- **Q: Why does starting Inbox Mover on Windows feel slow, and how do I fix it?**
+  - **A:** Windows Defender scans newly downloaded `.exe` files on every launch and Windows marks browser downloads as blocked ("Mark of the Web"). To make startup instant:
+    1. Copy the Windows executables (`inbox-mover-rust-gui.exe`, `inbox-mover-rust-tui.exe`, `inbox-mover-rust.exe`) to `C:\Helpers`.
+    2. Open **Windows PowerShell as Administrator** (*Start → type `PowerShell` → right-click Windows PowerShell → Run as administrator*).
+    3. Run:
+       ```powershell
+       Add-MpPreference -ExclusionPath "C:\Helpers"
+       Unblock-File -Path "C:\Helpers\*.exe"
+       ```
+    4. *(Optional)* Create a Public Desktop shortcut (`C:\Users\Public\Desktop\Inbox Mover.lnk`) for all users:
+       ```powershell
+       $WshShell = New-Object -ComObject WScript.Shell
+       $Shortcut = $WshShell.CreateShortcut("C:\Users\Public\Desktop\Inbox Mover.lnk")
+       $Shortcut.TargetPath = "C:\Helpers\inbox-mover-rust-gui.exe"
+       $Shortcut.WorkingDirectory = "C:\Helpers"
+       $Shortcut.Save()
+       ```
+  - **Linux note:** Linux does not have Windows Defender or download-blocking (`Unblock-File`), so binaries start immediately once executable (`chmod +x`). Just copy them off any slow network mount to `/opt/InboxMover` or `~/bin`.
 - **Q: Why does a folder show `[✖]` in the queue?**
   - **A:** Either the **Target Folder** is blank, or **After Processing** is set to *Move to Processed* while **Processed Folder** is blank, or the folder is empty. Select the folder and read the **Smart Guidance Banner** at the top of the right panel for the exact cause.
 - **Q: Why does the Save button say `Save Rule *` with a `• Modified` badge?**

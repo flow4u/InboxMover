@@ -150,6 +150,10 @@ pub const QUICK_TIPS: &[(&str, &str)] = &[
         "By default, settings inside a transfer's `manifest.json` or `receipt.json` win first. Otherwise, Inbox Mover checks:\n1. Saved Config ID (`permitId` from receipt/manifest)\n2. Pattern Match (`*project*` against folder or file names)\n3. DEFAULT fallback rule.\nCheck 'Overrule receipt' if you always want your saved rules to win!",
     ),
     (
+        "Fast Startup on Windows (C:\\Helpers)",
+        "If launching the .exe on Windows feels slow due to Windows Defender scanning:\n1. Copy the executables to C:\\Helpers\n2. Open PowerShell as Administrator (Start -> type PowerShell -> right-click -> Run as administrator)\n3. Run:\n   Add-MpPreference -ExclusionPath \"C:\\Helpers\"\n   Unblock-File -Path \"C:\\Helpers\\*.exe\"\n4. Place a shortcut in C:\\Users\\Public\\Desktop for all users.\n(On Linux, just copy binaries to /opt/InboxMover or ~/bin and run chmod +x.)",
+    ),
+    (
         "Batch Processing Multiple Folders",
         "• GUI: Hold Shift or Ctrl while clicking folders in the Queue, then click 'Process N Folders'.\n• TUI: Press Space on folders in the Queue to toggle selection [*], then press Enter or P to batch-process oldest to newest.",
     ),
@@ -366,7 +370,20 @@ inbox-mover-rust --cli --dir /mnt/inbox --workspace personal
 
 # Overrule receipts and process a single specific transfer folder:
 inbox-mover-rust --cli --folder /mnt/inbox/transfer-12345 --overrule
-```"#,
+```
+
+### Windows Fast Startup & Public Desktop Setup
+If Windows Defender makes launching the `.exe` feel slow:
+1. Copy all Inbox Mover `.exe` files into `C:\Helpers`.
+2. Open **Windows PowerShell as Administrator** (*Start -> type `PowerShell` -> right-click Windows PowerShell -> Run as administrator*).
+3. Run:
+```powershell
+Add-MpPreference -ExclusionPath "C:\Helpers"
+Unblock-File -Path "C:\Helpers\*.exe"
+```
+4. Create a shortcut in `C:\Users\Public\Desktop\Inbox Mover.lnk` (right-click `C:\Helpers\inbox-mover-rust-gui.exe` -> *Create shortcut* -> move to `C:\Users\Public\Desktop\`).
+
+*(On Linux, no Defender exclusion or unblock step is needed — just copy the binaries to a local folder such as `/opt/InboxMover` or `~/bin` and run `chmod +x`.)*"#,
     },
 ];
 

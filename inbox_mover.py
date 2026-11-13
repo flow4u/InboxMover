@@ -1769,6 +1769,15 @@ Route by filename if `permitId` is missing. Enter a glob like `*.dwg`.
 
 # Logging
 Audit trails stored in workspace (`process_log.jsonl`) and individual folders (`Process.log`).
+
+# Windows Fast Startup & Public Desktop Setup
+If starting Inbox Mover on Windows feels slow (Windows Defender real-time scanning):
+* Copy the files to `C:\\Helpers`.
+* Open **PowerShell as Administrator** (Start -> type `PowerShell` -> right-click -> **Run as administrator**) and run:
+* `Add-MpPreference -ExclusionPath "C:\\Helpers"`
+* `Unblock-File -Path "C:\\Helpers\\*.exe"`
+* Create a shortcut and move it to `C:\\Users\\Public\\Desktop\\` so all users can launch it.
+* *(On Linux, no Defender exclusion or unblock step is needed — copy binaries to `/opt/InboxMover` or `~/bin` and run `chmod +x`.)*
 """
         for line in doc.split('\n'):
             if line.startswith('# '): txt.insert(tk.END, line[2:] + "\n", "h1")

@@ -44,8 +44,33 @@ You can run Inbox Mover either as **standalone compiled executables** (no Python
 
 #### **On Windows (Option A — Standalone Executables, no Python needed)**
 
-* **🦀 Rust Executable (Material 3 GUI / TUI / CLI):** Download **[`inbox-mover-rust-gui.exe`](./bin/rust/windows/inbox-mover-rust-gui.exe)** (or [`inbox-mover-rust-tui.exe`](./bin/rust/windows/inbox-mover-rust-tui.exe) / [`inbox-mover-rust.exe`](./bin/rust/windows/inbox-mover-rust.exe)) from **[`bin/rust/windows/`](./bin/rust/windows/)** and run it directly—no installation or GPU drivers needed.
+* **🦀 Rust Executable (Material 3 GUI / TUI / CLI):** Download **[`inbox-mover-rust-gui.exe`](./bin/rust/windows/inbox-mover-rust-gui.exe)** (or [`inbox-mover-rust-tui.exe`](./bin/rust/windows/inbox-mover-rust-tui.exe) / [`inbox-mover-rust.exe`](./bin/rust/windows/inbox-mover-rust.exe)) from **[`bin/rust/windows/`](./bin/rust/windows/)**. See **[`bin/rust/windows/README_WINDOWS_INSTALL.txt`](./bin/rust/windows/README_WINDOWS_INSTALL.txt)** for a copy-paste setup guide.
 * **🐍 Python-based Executable:** See [**inbox_mover.exe**](https://github.com/flow4u/InboxMover/releases/tag/windows)
+
+##### ⚡ Speed Up Windows Startup & Create a Public Desktop Shortcut (Recommended)
+If starting the `.exe` on Windows (especially on a VM / myDRE) feels slow, Windows Defender is scanning it on every launch and Windows may have marked the downloaded files as blocked.
+
+1. **Copy all downloaded files** into `C:\Helpers` (e.g. `inbox-mover-rust-gui.exe`, `inbox-mover-rust-tui.exe`, `inbox-mover-rust.exe`).
+2. **Open PowerShell as Administrator**:
+   * Press the **Windows key** (or click **Start**), type `PowerShell`, right-click **Windows PowerShell**, and click **Run as administrator**.
+3. **Copy & paste these commands** into the Administrator PowerShell window and press **Enter**:
+   ```powershell
+   New-Item -ItemType Directory -Force -Path "C:\Helpers" | Out-Null
+   Add-MpPreference -ExclusionPath "C:\Helpers"
+   Unblock-File -Path "C:\Helpers\*.exe"
+   ```
+   *(This excludes `C:\Helpers` from Windows Defender re-scans and removes the Windows download block on all `.exe` files.)*
+4. **Create a Desktop shortcut for all users (`C:\Users\Public\Desktop`)**:
+   * **PowerShell (copy & paste):**
+     ```powershell
+     $WshShell = New-Object -ComObject WScript.Shell
+     $Shortcut = $WshShell.CreateShortcut("C:\Users\Public\Desktop\Inbox Mover.lnk")
+     $Shortcut.TargetPath = "C:\Helpers\inbox-mover-rust-gui.exe"
+     $Shortcut.WorkingDirectory = "C:\Helpers"
+     $Shortcut.Description = "Inbox Mover (Material 3 GUI)"
+     $Shortcut.Save()
+     ```
+   * **Or manually:** Right-click `C:\Helpers\inbox-mover-rust-gui.exe` → **Create shortcut** → rename it to `Inbox Mover` → move it to `C:\Users\Public\Desktop\`.
 
 
 #### **On Windows (Option B — Python Script `inbox_mover.py`)**
@@ -72,11 +97,18 @@ You can run Inbox Mover either as **standalone compiled executables** (no Python
 #### **On Linux**
 
 ##### Option A — Standalone Rust Executables (no `python3-tk` needed)
-1. Download **[`inbox-mover-rust-gui`](./bin/rust/linux/inbox-mover-rust-gui)** (desktop GUI), **[`inbox-mover-rust-tui`](./bin/rust/linux/inbox-mover-rust-tui)** (SSH / terminal UI), or **[`inbox-mover-rust`](./bin/rust/linux/inbox-mover-rust)** (all-in-one + `--cli`) from **[`bin/rust/linux/`](./bin/rust/linux/)**.
-2. Make it executable and launch:
+1. Download **[`inbox-mover-rust-gui`](./bin/rust/linux/inbox-mover-rust-gui)** (desktop GUI), **[`inbox-mover-rust-tui`](./bin/rust/linux/inbox-mover-rust-tui)** (SSH / terminal UI), or **[`inbox-mover-rust`](./bin/rust/linux/inbox-mover-rust)** (all-in-one + `--cli`) from **[`bin/rust/linux/`](./bin/rust/linux/)**. *(See also [`bin/rust/linux/README_LINUX_INSTALL.txt`](./bin/rust/linux/README_LINUX_INSTALL.txt).)*
+2. Linux does not suffer from Windows Defender/SmartScreen launch delays, so binaries start immediately once executable—just copy them off any slow network share to a local path (such as `/opt/InboxMover` or `~/bin`) and set `+x`:
    ```bash
-   chmod +x inbox-mover-rust-gui inbox-mover-rust-tui
-   ./inbox-mover-rust-gui   # or ./inbox-mover-rust-tui
+   sudo mkdir -p /opt/InboxMover
+   sudo cp inbox-mover-rust-gui inbox-mover-rust-tui inbox-mover-rust /opt/InboxMover/
+   sudo chmod +x /opt/InboxMover/inbox-mover-rust*
+   /opt/InboxMover/inbox-mover-rust-gui   # or inbox-mover-rust-tui
+   ```
+3. *(Optional)* To add a desktop/menu shortcut for all users, copy [`assets/inbox_mover.png`](./assets/inbox_mover.png) and [`assets/inbox-mover.desktop`](./assets/inbox-mover.desktop):
+   ```bash
+   sudo cp assets/inbox_mover.png /usr/share/icons/hicolor/256x256/apps/inbox_mover.png
+   sudo sed 's|^Exec=.*|Exec=/opt/InboxMover/inbox-mover-rust-gui|' assets/inbox-mover.desktop | sudo tee /usr/share/applications/inbox-mover.desktop > /dev/null
    ```
 
 ##### Option B — Python Script (`inbox_mover.py` / `inbox_mover_tui.py`)

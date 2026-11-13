@@ -19,6 +19,25 @@ All Rust executables include `rust` in their filename so they never collide with
 
 *(Prefer the Python-based Windows executable or script? See [`inbox_mover.exe` on GitHub Releases](https://github.com/flow4u/InboxMover/releases/tag/windows) or [`../inbox_mover.py`](../inbox_mover.py).)*
 
+### ⚡ Windows Fast Startup & Public Desktop Setup (`C:\Helpers`)
+For a step-by-step copy-paste guide, see **[`./rust/windows/README_WINDOWS_INSTALL.txt`](./rust/windows/README_WINDOWS_INSTALL.txt)**:
+1. Copy the downloaded `.exe` files into `C:\Helpers`.
+2. Open **Windows PowerShell as Administrator** (*Start → type `PowerShell` → right-click Windows PowerShell → Run as administrator*) and run:
+   ```powershell
+   New-Item -ItemType Directory -Force -Path "C:\Helpers" | Out-Null
+   Add-MpPreference -ExclusionPath "C:\Helpers"
+   Unblock-File -Path "C:\Helpers\*.exe"
+   ```
+3. Create a Public Desktop shortcut (`C:\Users\Public\Desktop`) for all users:
+   ```powershell
+   $WshShell = New-Object -ComObject WScript.Shell
+   $Shortcut = $WshShell.CreateShortcut("C:\Users\Public\Desktop\Inbox Mover.lnk")
+   $Shortcut.TargetPath = "C:\Helpers\inbox-mover-rust-gui.exe"
+   $Shortcut.WorkingDirectory = "C:\Helpers"
+   $Shortcut.Description = "Inbox Mover (Material 3 GUI)"
+   $Shortcut.Save()
+   ```
+
 ---
 
 ## 🐧 Linux — Rust Executables (`bin/rust/linux/`)
@@ -32,12 +51,14 @@ All Rust executables include `rust` in their filename so they never collide with
 *(Prefer the Python scripts on Linux? Run `python3 ../inbox_mover.py` for GUI or `python3 ../inbox_mover_tui.py` for TUI.)*
 
 ### Running Rust Binaries on Linux
-Ensure the downloaded binary has execute permissions:
+Linux does not use Windows Defender or download-blocking (`Unblock-File`), so binaries start instantaneously once executable. To avoid slow network-mount latency, copy them to a local directory (such as `/opt/InboxMover`) and set execute permissions (see **[`./rust/linux/README_LINUX_INSTALL.txt`](./rust/linux/README_LINUX_INSTALL.txt)**):
 ```bash
-chmod +x inbox-mover-rust-gui inbox-mover-rust-tui inbox-mover-rust
-./inbox-mover-rust-gui     # Launch Material 3 GUI
-./inbox-mover-rust-tui     # Launch Material 3 Terminal UI
-./inbox-mover-rust --cli   # Run headless batch processing
+sudo mkdir -p /opt/InboxMover
+sudo cp inbox-mover-rust-gui inbox-mover-rust-tui inbox-mover-rust /opt/InboxMover/
+sudo chmod +x /opt/InboxMover/inbox-mover-rust*
+/opt/InboxMover/inbox-mover-rust-gui     # Launch Material 3 GUI
+/opt/InboxMover/inbox-mover-rust-tui     # Launch Material 3 Terminal UI
+/opt/InboxMover/inbox-mover-rust --cli   # Run headless batch processing
 ```
 
 ---
