@@ -405,7 +405,7 @@ impl TuiApp {
                                     .current_folder()
                                     .map(|f| f.permit_id.clone())
                                     .unwrap_or_else(|| "DEFAULT".to_string());
-                                match self.core.create_receipt_file(
+                                match self.core.create_manifest_file(
                                     &path,
                                     &self.active_rule,
                                     Some(&pid),
@@ -413,12 +413,12 @@ impl TuiApp {
                                     Ok(()) => {
                                         self.refresh_folders();
                                         self.status_message =
-                                            format!("Generated receipt at {val}");
+                                            format!("Generated manifest at {val}");
                                         self.status_is_error = false;
                                     }
                                     Err(e) => {
                                         self.status_message =
-                                            format!("Receipt error: {e}");
+                                            format!("Manifest error: {e}");
                                         self.status_is_error = true;
                                     }
                                 }
@@ -758,13 +758,14 @@ impl TuiApp {
                     .current_folder()
                     .map(|f| {
                         f.folder_path
-                            .join("receipt.json")
+                            .join("manifest.json")
                             .to_string_lossy()
                             .to_string()
                     })
-                    .unwrap_or_else(|| "receipt.json".to_string());
+                    .unwrap_or_else(|| "manifest.json".to_string());
                 self.modal = TuiModal::EditInput {
-                    title: "Generate receipt.json at Path".to_string(),
+                    title: "Create Manifest (manifest.json — include with User Portal upload)"
+                        .to_string(),
                     field: EditField::CreateReceiptFile,
                     buffer: default_path,
                 };
@@ -1112,7 +1113,7 @@ impl TuiApp {
                 ),
             ]),
             Line::from(vec![Span::styled(
-                " Actions: [Enter/p] Process  [s] Save Rule  [m] Manage Rules  [l] View Logs  [c] Create Receipt  [d] Delete",
+                " Actions: [Enter/p] Process  [s] Save Rule  [m] Manage Rules  [l] View Logs  [c] Create Manifest  [d] Delete",
                 Style::default().fg(M3_MUTED),
             )]),
         ];
@@ -1182,7 +1183,7 @@ impl TuiApp {
 
         let receipt_text = if let Some(folder) = self.current_folder() {
             if folder.receipt_raw.trim().is_empty() {
-                "No receipt.json found in this folder (Config ID: No_ID).\n\nTip: Press 's' to save a Wildcard Pattern rule, or 'c' to generate a receipt.json.".to_string()
+                "No receipt.json or manifest.json found in this folder (Config ID: No_ID).\n\nTip: Press 's' to save a Wildcard Pattern rule, or 'c' (Create Manifest) to generate a manifest.json to include when uploading in the User Portal.".to_string()
             } else {
                 folder.receipt_raw.clone()
             }
@@ -1195,7 +1196,7 @@ impl TuiApp {
             .scroll((self.inspector_scroll, 0))
             .block(
                 Block::default()
-                    .title(" 📋 Receipt JSON Inspector ")
+                    .title(" 📋 Receipt & Manifest Inspector ")
                     .borders(Borders::ALL)
                     .border_style(Style::default().fg(insp_border))
                     .style(Style::default().bg(M3_SURFACE).fg(M3_ON_SURFACE)),

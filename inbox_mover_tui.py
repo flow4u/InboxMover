@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Inbox Mover TUI v0.20.0
+Inbox Mover TUI v0.21.0
 A TUI conversion of the Inbox Mover utility.
 Runs on standard Python libraries (uses curses for the interface).
 
@@ -23,7 +23,7 @@ import fnmatch
 import curses
 import textwrap
 
-VERSION = "0.20.0 (TUI)"
+VERSION = "0.21.0 (TUI)"
 
 # --------------------------------------------------------------------------- #
 # CORE LOGIC (Preserved from original)
@@ -141,57 +141,103 @@ class InboxMoverCore:
         folders_data.sort(key=lambda x: x['folder_name'], reverse=True)
         return folders_data
 
+    def _is_receipt_file(self, filename):
+        low = os.path.basename(filename).lower()
+        return fnmatch.fnmatch(low, 'receipt*.json') or fnmatch.fnmatch(low, 'reciept*.json')
+
+    def _is_manifest_file(self, filename):
+        low = os.path.basename(filename).lower()
+        return fnmatch.fnmatch(low, 'manifest*.json')
+
+    def _merge_receipt_and_manifest(self, receipt_dict, manifest_dict):
+        if receipt_dict and manifest_dict:
+            merged = dict(receipt_dict)
+            for id_key in ("permitId", "id", "configId"):
+                mp = manifest_dict.get(id_key)
+                if isinstance(mp, str) and mp.strip() and mp.strip() not in ("DEFAULT", "No_ID"):
+                    merged["permitId"] = mp.strip()
+                    break
+            for key in ("target_folder", "process_folder", "processed_folder", "receipt_folder",
+                        "conflict_resolution", "post_processing", "auto_extract", "auto_unzip"):
+                if key in manifest_dict and manifest_dict[key] is not None:
+                    val = manifest_dict[key]
+                    if not isinstance(val, str) or val.strip() != "":
+                        merged[key] = val
+            if "processed_folder" in merged and not merged.get("process_folder"):
+                merged["process_folder"] = merged["processed_folder"]
+            return merged
+        elif manifest_dict:
+            merged = dict(manifest_dict)
+            if "processed_folder" in merged and not merged.get("process_folder"):
+                merged["process_folder"] = merged["processed_folder"]
+            return merged
+        elif receipt_dict:
+            return dict(receipt_dict)
+        return None
+
     def inspect_transfer_folder(self, folder_path):
         data = {"folder_path": folder_path, "folder_name": os.path.basename(folder_path), "zip_path": None, "permitId": "DEFAULT", "receipt": None, "receipt_raw": "", "has_valid_zip": False, "can_process": False, "has_log": False, "file_list": []}
         if os.path.exists(os.path.join(folder_path, "Process.log")) or os.path.exists(os.path.join(folder_path, "Inbox Process.log")):
             data["has_log"] = True
-        valid_zip_found, loose_receipt_data, loose_receipt_raw, has_loose_receipt = False, None, "", False
+        valid_zip_found, loose_receipt_data, loose_manifest_data, loose_raw = False, None, None, ""
         for root, _, files in os.walk(folder_path):
             for file in files:
                 rel_file = os.path.relpath(os.path.join(root, file), folder_path)
                 data["file_list"].append(rel_file)
-                if fnmatch.fnmatch(file.lower(), 'receipt*.json') or fnmatch.fnmatch(file.lower(), 'reciept*.json'):
-                    has_loose_receipt = True
+                is_rec = self._is_receipt_file(file)
+                is_man = self._is_manifest_file(file)
+                if is_rec or is_man:
                     try:
                         with open(os.path.join(root, file), 'r', encoding='utf-8') as f:
                             raw = f.read()
-                            if not loose_receipt_raw: loose_receipt_raw = raw
-                            if raw.strip() and not loose_receipt_data:
-                                try: loose_receipt_data = json.loads(raw)
+                            if not loose_raw: loose_raw = raw
+                            if raw.strip():
+                                try:
+                                    parsed = json.loads(raw)
+                                    if is_man and loose_manifest_data is None: loose_manifest_data = parsed
+                                    elif is_rec and loose_receipt_data is None: loose_receipt_data = parsed
                                 except Exception: pass
                     except Exception: pass
+        zip_rec, zip_man, zip_raw = None, None, ""
         for root, _, files in os.walk(folder_path):
             for file in files:
                 if file.lower().endswith('.zip') and not valid_zip_found:
                     zip_path = os.path.join(root, file)
                     data["zip_path"], data["has_valid_zip"], valid_zip_found = zip_path, True, True
-                    if has_loose_receipt:
-                        data["receipt"], data["receipt_raw"] = loose_receipt_data, loose_receipt_raw
-                        data["permitId"] = loose_receipt_data.get("permitId", "DEFAULT") if loose_receipt_data else "DEFAULT"
-                    else:
-                        zip_info = self.inspect_zip(zip_path)
-                        if zip_info:
-                            data.update({"permitId": zip_info["permitId"], "receipt": zip_info["receipt"], "receipt_raw": zip_info["receipt_raw"]})
+                    zip_info = self.inspect_zip(zip_path)
+                    if zip_info:
+                        zip_rec = zip_info.get("receipt_only")
+                        zip_man = zip_info.get("manifest_only")
+                        zip_raw = zip_info.get("receipt_raw", "")
                     break
-        if not valid_zip_found:
-            if has_loose_receipt:
-                data["receipt"], data["receipt_raw"] = loose_receipt_data, loose_receipt_raw
-                data["permitId"] = loose_receipt_data.get("permitId", "DEFAULT") if loose_receipt_data else "DEFAULT"
-                data["can_process"] = True
-            else: data["can_process"] = len(data["file_list"]) > 0
-        else: data["can_process"] = True
+        merged = self._merge_receipt_and_manifest(loose_receipt_data or zip_rec, loose_manifest_data or zip_man)
+        if merged is not None:
+            data["receipt"] = merged
+            data["receipt_raw"] = loose_raw or zip_raw
+            data["permitId"] = merged.get("permitId", "DEFAULT")
+        data["can_process"] = valid_zip_found or len(data["file_list"]) > 0
         return data
 
     def inspect_zip(self, zip_path):
         try:
             with zipfile.ZipFile(zip_path, 'r') as zf:
-                receipt_filenames = [f for f in zf.namelist() if fnmatch.fnmatch(os.path.basename(f).lower(), 'receipt*.json') or fnmatch.fnmatch(os.path.basename(f).lower(), 'reciept*.json')]
-                if receipt_filenames:
-                    content = zf.open(receipt_filenames[0]).read().decode('utf-8')
-                    try: r_data = json.loads(content)
-                    except: r_data = {}
-                    return {"permitId": r_data.get("permitId", "DEFAULT"), "receipt": r_data, "receipt_raw": content}
-        except: pass
+                rec_data, man_data, raw_str = None, None, ""
+                for f in zf.namelist():
+                    if f.endswith('/'): continue
+                    is_rec = self._is_receipt_file(f)
+                    is_man = self._is_manifest_file(f)
+                    if is_rec or is_man:
+                        content = zf.open(f).read().decode('utf-8')
+                        if not raw_str: raw_str = content
+                        try:
+                            parsed = json.loads(content)
+                            if is_man and man_data is None: man_data = parsed
+                            elif is_rec and rec_data is None: rec_data = parsed
+                        except Exception: pass
+                merged = self._merge_receipt_and_manifest(rec_data, man_data)
+                if merged is not None:
+                    return {"permitId": merged.get("permitId", "DEFAULT"), "receipt": merged, "receipt_only": rec_data, "manifest_only": man_data, "receipt_raw": raw_str}
+        except Exception: pass
         return None
 
     def save_config(self, permit_id, config_data):

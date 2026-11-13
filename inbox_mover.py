@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """
-Inbox Mover v0.20.0
-A utility to process and extract zip files containing a receipt*.json,
+Inbox Mover v0.21.0
+A utility to process and extract zip files containing a receipt*.json or manifest*.json,
 with both a Material-inspired GUI and a CLI mode.
 Runs entirely on standard Python libraries.
 """
@@ -24,7 +24,7 @@ import webbrowser
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
 
-VERSION = "0.20.0"
+VERSION = "0.21.0"
 UI_FONT = "Segoe UI" if sys.platform == "win32" else "DejaVu Sans"
 MONO_FONT = "Consolas" if sys.platform == "win32" else "DejaVu Sans Mono"
 
@@ -240,8 +240,50 @@ class InboxMoverCore:
         folders_data.sort(key=lambda x: x['folder_name'], reverse=True)
         return folders_data
 
+    def _is_receipt_file(self, filename):
+        low = os.path.basename(filename).lower()
+        return fnmatch.fnmatch(low, 'receipt*.json') or fnmatch.fnmatch(low, 'reciept*.json')
+
+    def _is_manifest_file(self, filename):
+        low = os.path.basename(filename).lower()
+        return fnmatch.fnmatch(low, 'manifest*.json')
+
+    def _is_metadata_json(self, filename):
+        return self._is_receipt_file(filename) or self._is_manifest_file(filename)
+
+    def _merge_receipt_and_manifest(self, receipt_dict, manifest_dict):
+        """Merge portal receipt.json metadata (permitId, checksums) with user manifest.json routing options."""
+        if receipt_dict and manifest_dict:
+            merged = dict(receipt_dict)
+            for id_key in ("permitId", "id", "configId"):
+                mp = manifest_dict.get(id_key)
+                if isinstance(mp, str) and mp.strip() and mp.strip() not in ("DEFAULT", "No_ID"):
+                    merged["permitId"] = mp.strip()
+                    break
+            for key in ("target_folder", "process_folder", "processed_folder", "receipt_folder",
+                        "conflict_resolution", "post_processing", "auto_extract", "auto_unzip"):
+                if key in manifest_dict and manifest_dict[key] is not None:
+                    val = manifest_dict[key]
+                    if not isinstance(val, str) or val.strip() != "":
+                        merged[key] = val
+            if "processed_folder" in merged and not merged.get("process_folder"):
+                merged["process_folder"] = merged["processed_folder"]
+            if "auto_unzip" in merged and "auto_extract" not in manifest_dict:
+                merged["auto_extract"] = merged["auto_unzip"]
+            return merged
+        elif manifest_dict:
+            merged = dict(manifest_dict)
+            if "processed_folder" in merged and not merged.get("process_folder"):
+                merged["process_folder"] = merged["processed_folder"]
+            if "auto_unzip" in merged and "auto_extract" not in merged:
+                merged["auto_extract"] = merged["auto_unzip"]
+            return merged
+        elif receipt_dict:
+            return dict(receipt_dict)
+        return None
+
     def inspect_transfer_folder(self, folder_path):
-        """Inspect a transfer folder for a valid zip or a loose receipt*.json."""
+        """Inspect a transfer folder for a valid zip or loose receipt*.json / manifest*.json."""
         folder_name = os.path.basename(folder_path)
         data = {
             "folder_path": folder_path,
@@ -264,42 +306,45 @@ class InboxMoverCore:
         valid_zip_found = False
         file_list = []
         loose_receipt_data = None
-        loose_receipt_raw = ""
-        has_loose_receipt = False
+        loose_manifest_data = None
+        raw_sections = []
         
-        # 1. Gather all files and prioritize finding a loose receipt*.json
+        # 1. Gather all files and inspect loose manifest*.json / receipt*.json
         for root, _, files in os.walk(folder_path):
             for file in files:
                 rel_file = os.path.relpath(os.path.join(root, file), folder_path)
                 file_list.append(rel_file)
                 
-                # Use glob pattern for receipt files
-                if fnmatch.fnmatch(file.lower(), 'receipt*.json') or fnmatch.fnmatch(file.lower(), 'reciept*.json'):
-                    has_loose_receipt = True
-                    receipt_path = os.path.join(root, file)
+                is_rec = self._is_receipt_file(file)
+                is_man = self._is_manifest_file(file)
+                if is_rec or is_man:
+                    meta_path = os.path.join(root, file)
+                    label = "MANIFEST" if is_man else "RECEIPT"
                     try:
-                        with open(receipt_path, 'r', encoding='utf-8') as f:
+                        with open(meta_path, 'r', encoding='utf-8') as f:
                             raw_content = f.read()
-                            # If we find multiple, we'll append them for viewing, 
-                            # but pick the first valid one for configuration.
-                            if not loose_receipt_raw:
-                                loose_receipt_raw = raw_content
-                            else:
-                                loose_receipt_raw += f"\n\n--- OTHER RECEIPT: {file} ---\n" + raw_content
-                            
-                        if raw_content.strip() and not loose_receipt_data:
+                        if raw_content.strip():
                             try:
-                                loose_receipt_data = json.loads(raw_content)
+                                parsed = json.loads(raw_content)
+                                if is_man and loose_manifest_data is None:
+                                    loose_manifest_data = parsed
+                                elif is_rec and loose_receipt_data is None:
+                                    loose_receipt_data = parsed
+                                raw_sections.append((f"{label}: {file}", raw_content))
                             except json.JSONDecodeError as e:
-                                warning_msg = f"[WARNING: {file} is not a valid JSON file.]\n[Error details: {e}]\n\n"
-                                loose_receipt_raw = warning_msg + loose_receipt_raw
+                                warning_msg = f"[WARNING: {file} is not a valid JSON file.]\n[Error details: {e}]\n\n" + raw_content
+                                raw_sections.append((f"{label}: {file}", warning_msg))
+                        else:
+                            raw_sections.append((f"{label}: {file}", "<file is empty>"))
                     except Exception as e:
                         print(f"Error reading {file}: {e}")
-                        loose_receipt_raw = f"[Error reading {file}: {e}]"
+                        raw_sections.append((f"{label}: {file}", f"[Error reading {file}: {e}]"))
         
         data["file_list"] = file_list
         
-        # 2. Check for ZIP files and apply logic
+        # 2. Check for ZIP files and merge loose + ZIP receipt/manifest metadata
+        zip_receipt_data = None
+        zip_manifest_data = None
         for root, _, files in os.walk(folder_path):
             for file in files:
                 if file.lower().endswith('.zip') and not valid_zip_found:
@@ -308,72 +353,96 @@ class InboxMoverCore:
                     data["has_valid_zip"] = True
                     valid_zip_found = True
                     
-                    if has_loose_receipt:
-                        data["receipt"] = loose_receipt_data
-                        data["receipt_raw"] = loose_receipt_raw if loose_receipt_raw.strip() else "<receipt files are empty>"
-                        data["permitId"] = loose_receipt_data.get("permitId", "DEFAULT") if loose_receipt_data else "DEFAULT"
-                    else:
-                        zip_info = self.inspect_zip(zip_path)
-                        if zip_info and zip_info.get("receipt_raw"):
-                            data["permitId"] = zip_info["permitId"]
-                            data["receipt"] = zip_info["receipt"]
-                            data["receipt_raw"] = zip_info["receipt_raw"]
+                    zip_info = self.inspect_zip(zip_path)
+                    if zip_info:
+                        zip_receipt_data = zip_info.get("receipt_only")
+                        zip_manifest_data = zip_info.get("manifest_only")
+                        for sec in zip_info.get("raw_sections", []):
+                            raw_sections.append(sec)
                     break
-        
-        if not valid_zip_found:
-            if has_loose_receipt:
-                data["receipt"] = loose_receipt_data
-                data["receipt_raw"] = loose_receipt_raw if loose_receipt_raw.strip() else "<receipt files are empty>"
-                data["permitId"] = loose_receipt_data.get("permitId", "DEFAULT") if loose_receipt_data else "DEFAULT"
-                data["can_process"] = True
-            elif not file_list:
-                data["receipt_raw"] = ""
-                data["can_process"] = False
-            else:
-                data["receipt_raw"] = ""
-                data["can_process"] = True
+
+        eff_receipt = loose_receipt_data if loose_receipt_data is not None else zip_receipt_data
+        eff_manifest = loose_manifest_data if loose_manifest_data is not None else zip_manifest_data
+        merged_meta = self._merge_receipt_and_manifest(eff_receipt, eff_manifest)
+
+        if len(raw_sections) == 1:
+            combined_raw = raw_sections[0][1]
+        elif len(raw_sections) > 1:
+            # Show manifest sections first so user overrides are immediately visible
+            ordered = sorted(raw_sections, key=lambda s: 0 if s[0].startswith("MANIFEST") else 1)
+            combined_raw = "\n\n".join(f"// --- {hdr} ---\n{body.strip()}" for hdr, body in ordered)
         else:
-            data["can_process"] = True
+            combined_raw = ""
+
+        if merged_meta is not None or combined_raw:
+            data["receipt"] = merged_meta
+            data["receipt_raw"] = combined_raw if combined_raw.strip() else "<metadata files are empty>"
+            if isinstance(merged_meta, dict):
+                pid = merged_meta.get("permitId") or merged_meta.get("id") or merged_meta.get("configId") or "DEFAULT"
+                data["permitId"] = pid
+            else:
+                data["permitId"] = "DEFAULT"
+
+        if valid_zip_found or merged_meta is not None or len(file_list) > 0:
+            data["can_process"] = len(file_list) > 0
+        else:
+            data["can_process"] = False
                 
         return data
 
     def inspect_zip(self, zip_path):
-        """Read a zip file to extract receipt*.json without full extraction."""
+        """Read a zip file to extract receipt*.json and/or manifest*.json without full extraction."""
         data = {
             "permitId": "DEFAULT",
             "receipt": None,
-            "receipt_raw": ""
+            "receipt_only": None,
+            "manifest_only": None,
+            "receipt_raw": "",
+            "raw_sections": []
         }
         try:
             with zipfile.ZipFile(zip_path, 'r') as zf:
-                # Use glob pattern search within ZIP
-                receipt_filenames = [f for f in zf.namelist() if fnmatch.fnmatch(os.path.basename(f).lower(), 'receipt*.json') or fnmatch.fnmatch(os.path.basename(f).lower(), 'reciept*.json')]
+                meta_filenames = [
+                    f for f in zf.namelist()
+                    if not f.endswith('/') and self._is_metadata_json(f)
+                ]
                 
-                if receipt_filenames:
-                    combined_raw = ""
-                    first_valid_json = None
+                if meta_filenames:
+                    receipt_json = None
+                    manifest_json = None
+                    raw_sections = []
                     
-                    for receipt_filename in receipt_filenames:
+                    for meta_filename in meta_filenames:
+                        bname = os.path.basename(meta_filename)
+                        is_man = self._is_manifest_file(bname)
+                        label = "MANIFEST IN ZIP" if is_man else "RECEIPT IN ZIP"
                         try:
-                            with zf.open(receipt_filename) as f:
+                            with zf.open(meta_filename) as f:
                                 content = f.read().decode('utf-8')
-                                if not combined_raw:
-                                    combined_raw = content
-                                else:
-                                    combined_raw += f"\n\n--- OTHER RECEIPT IN ZIP: {os.path.basename(receipt_filename)} ---\n" + content
-                                
-                                if not first_valid_json:
-                                    try:
-                                        first_valid_json = json.loads(content)
-                                    except json.JSONDecodeError:
-                                        pass
+                                raw_sections.append((f"{label}: {bname}", content))
+                                try:
+                                    parsed = json.loads(content)
+                                    if is_man and manifest_json is None:
+                                        manifest_json = parsed
+                                    elif not is_man and receipt_json is None:
+                                        receipt_json = parsed
+                                except json.JSONDecodeError:
+                                    pass
                         except RuntimeError:
-                            combined_raw += f"\n<{os.path.basename(receipt_filename)} is password protected>"
+                            raw_sections.append((f"{label}: {bname}", f"<{bname} is password protected>"))
                     
-                    data["receipt_raw"] = combined_raw
-                    if first_valid_json:
-                        data["receipt"] = first_valid_json
-                        data["permitId"] = first_valid_json.get("permitId", "DEFAULT")
+                    merged = self._merge_receipt_and_manifest(receipt_json, manifest_json)
+                    data["receipt_only"] = receipt_json
+                    data["manifest_only"] = manifest_json
+                    data["raw_sections"] = raw_sections
+                    if len(raw_sections) == 1:
+                        data["receipt_raw"] = raw_sections[0][1]
+                    else:
+                        ordered = sorted(raw_sections, key=lambda s: 0 if s[0].startswith("MANIFEST") else 1)
+                        data["receipt_raw"] = "\n\n".join(f"// --- {hdr} ---\n{body.strip()}" for hdr, body in ordered)
+                    if merged:
+                        data["receipt"] = merged
+                        data["permitId"] = merged.get("permitId") or merged.get("id") or merged.get("configId") or "DEFAULT"
                 return data
         except Exception:
             return None
@@ -487,7 +556,10 @@ class InboxMoverCore:
 
         for act in actions:
             dest = act.get("destination", "")
-            if isinstance(dest, str) and dest.lower().endswith(".json") and (fnmatch.fnmatch(os.path.basename(dest).lower(), 'receipt*.json') or fnmatch.fnmatch(os.path.basename(dest).lower(), 'reciept*.json')) and os.path.exists(dest):
+            if isinstance(dest, str) and dest.lower().endswith(".json") and any(
+                fnmatch.fnmatch(os.path.basename(dest).lower(), pat)
+                for pat in ('*receipt*.json', '*reciept*.json', '*manifest*.json')
+            ) and os.path.exists(dest):
                 try:
                     with open(dest, 'r', encoding='utf-8') as f:
                         try:
@@ -646,8 +718,8 @@ class InboxMoverCore:
                     
                     is_absolute = original_name.startswith('/') or original_name.startswith('\\') or (len(original_name) >= 3 and original_name[1] == ':' and original_name[2] in ('/', '\\'))
                     
-                    # Wildcard match for receipt*.json in ZIP
-                    if fnmatch.fnmatch(os.path.basename(original_name).lower(), 'receipt*.json') or fnmatch.fnmatch(os.path.basename(original_name).lower(), 'reciept*.json'):
+                    # Wildcard match for receipt*.json or manifest*.json in ZIP
+                    if self._is_metadata_json(original_name):
                         timestamp = datetime.datetime.now().strftime("%y%m%d-%H%M%S")
                         new_filename = f"{timestamp}-{os.path.basename(safe_name)}"
                         if receipt_folder and os.path.isdir(receipt_folder):
@@ -703,8 +775,8 @@ class InboxMoverCore:
                         extract_zip_file(src_path)
                     else:
                         rel_path = os.path.relpath(src_path, folder_path)
-                        # Wildcard match for loose receipt*.json
-                        if fnmatch.fnmatch(file.lower(), 'receipt*.json') or fnmatch.fnmatch(file.lower(), 'reciept*.json'):
+                        # Wildcard match for loose receipt*.json or manifest*.json
+                        if self._is_metadata_json(file):
                             timestamp = datetime.datetime.now().strftime("%y%m%d-%H%M%S")
                             new_filename = f"{timestamp}-{file}"
                             if receipt_folder and os.path.isdir(receipt_folder):
@@ -1035,9 +1107,9 @@ class InboxMoverGUI:
         receipt_row = ttk.Frame(rules_inner, style="Card.TFrame")
         receipt_row.pack(fill=tk.X, pady=10)
         ttk.Label(receipt_row, text="", width=14, style="Card.TLabel").pack(side=tk.LEFT)
-        self.btn_create_receipt = ttk.Button(receipt_row, text="Create Receipt", command=self.create_receipt_file, takefocus=0)
+        self.btn_create_receipt = ttk.Button(receipt_row, text="Create Manifest", command=self.create_receipt_file, takefocus=0)
         self.btn_create_receipt.pack(side=tk.LEFT)
-        ToolTip(self.btn_create_receipt, "Export current settings to a receipt*.json file", self.is_dark_mode)
+        ToolTip(self.btn_create_receipt, "Export current settings to manifest.json — add it with your upload in the User Portal so Inbox Mover reads and applies it automatically", self.is_dark_mode)
 
         ttk.Separator(self.detail_container, orient='horizontal').pack(fill=tk.X, pady=(5, 8))
 
@@ -1645,26 +1717,27 @@ Inbox Mover processes project folders (starting with `transfer-`) by extracting 
 
 # Core Logic
 
-## 1. The `receipt.json` File
-Inside ZIP or transfer root.
-Example:
+## 1. The `manifest.json` & `receipt.json` Files
+Inside a ZIP archive or at the transfer folder root.
+Example `manifest.json`:
 `{{`
-`  "target_folder": "C:/Incoming",`
-`  "process_folder": "C:/Archive",`
+`  "target_folder": "Z:/Project/Incoming",`
+`  "process_folder": "Z:/Project/Archive",`
 `  "conflict_resolution": "rename_existing",`
 `  "post_processing": "move",`
 `  "auto_extract": true`
 `}}`
 
-## 2. Valid Receipt Options
+## 2. Valid Manifest / Receipt Options
 * **Conflict Resolution:** `overwrite`, `keep_both`, `rename_existing`.
 * **Post Processing:** `leave`, `delete`, `move`.
 
-## 3. Creating Receipts
-Use **Create Receipt** button to generate a file based on UI settings.
-* Files must be named `receipt*.json` (e.g. `receipt_upload.json`).
-* These files automate routing when placed in transfer folders.
-* Cross-platform note: Paths starting with `i:`, `z:`, or `/mnt` are considered cross-platform. "Local" paths (like `C:/` or `/home/`) trigger a Pattern Matching fallback if used on the wrong OS.
+## 3. Creating an Upload Manifest (`Create Manifest` & User Portal)
+Use the **Create Manifest** button to generate a `manifest.json` file based on your current UI settings.
+* **Use with the User Portal:** When you upload files in the **User Portal**, include this `manifest.json` file alongside the files in your upload.
+* **Automatic Detection & Merging:** When the transfer arrives in your Inbox, Inbox Mover automatically reads `manifest.json` (whether inside the portal's `.zip` or loose in the `transfer-*` folder) and uses your destination and processing settings. It seamlessly merges with the User Portal's automatic `receipt.json` so the portal's `permitId` and checksums are preserved while your `manifest.json` routing rules are applied!
+* Supported filenames: `manifest*.json` (recommended for User Portal uploads) or `receipt*.json`.
+* Cross-platform note: Paths starting with `i:`, `z:`, or `/mnt` are automatically translated between Windows and Linux. "Local" paths (like `C:/` or `/home/`) trigger a Pattern Matching fallback if used on the wrong OS.
 
 # Advanced Routing
 
@@ -2256,7 +2329,7 @@ Audit trails stored in workspace (`process_log.jsonl`) and individual folders (`
         self.root.focus_force()
 
     def create_receipt_file(self):
-        """Allow user to create and save a new receipt*.json file based on current GUI state."""
+        """Allow user to create and save a new manifest.json (or receipt*.json) file based on current GUI state."""
         receipt_data = {
             "target_folder": self.target_folder_var.get(),
             "process_folder": self.target_zip_folder_var.get(),
@@ -2274,28 +2347,38 @@ Audit trails stored in workspace (`process_log.jsonl`) and individual folders (`
         while True:
             file_path = filedialog.asksaveasfilename(
                 parent=self.root,
-                title="Create Receipt File",
+                title="Create Upload Manifest (add to your upload in the User Portal)",
                 initialdir=default_dir,
-                initialfile="receipt.json",
+                initialfile="manifest.json",
                 defaultextension=".json",
-                filetypes=[("JSON files", "*.json")]
+                filetypes=[("JSON Manifest", "*.json")]
             )
 
             if not file_path:
                 return # User cancelled
 
             filename = os.path.basename(file_path).lower()
-            if fnmatch.fnmatch(filename, "receipt*.json") or fnmatch.fnmatch(filename, "reciept*.json"):
+            if self.core._is_metadata_json(filename):
                 try:
                     with open(file_path, 'w', encoding='utf-8') as f:
                         json.dump(receipt_data, f, indent=4)
-                    messagebox.showinfo("Success", f"Receipt file created:\n{file_path}", parent=self.root)
+                    messagebox.showinfo(
+                        "Manifest Created",
+                        f"Upload manifest created:\n{file_path}\n\n"
+                        "Tip: Add this file along with your files when uploading in the User Portal — "
+                        "Inbox Mover will automatically read it and apply these settings.",
+                        parent=self.root
+                    )
                     return
                 except Exception as e:
                     messagebox.showerror("Error", f"Failed to save file: {e}", parent=self.root)
                     return
             else:
-                messagebox.showwarning("Invalid Name", "The filename must begin with 'receipt' and end with '.json'\n(e.g., receipt_test.json)", parent=self.root)
+                messagebox.showwarning(
+                    "Invalid Name",
+                    "The filename must begin with 'manifest' (recommended) or 'receipt' and end with '.json'\n(e.g., manifest.json)",
+                    parent=self.root
+                )
 
     def process_current_zip(self):
         """Process ZIP contents in a background thread with a live status popup."""
@@ -2417,7 +2500,7 @@ Audit trails stored in workspace (`process_log.jsonl`) and individual folders (`
         elif b == self.btn_save_config: base = "💾 Save *" if "*" in bt else "💾 Save"
         elif b == self.btn_manage_configs: base = "⚙ Manage"
         elif b == self.btn_open_local_log: base = "📄 View Log"
-        elif b == self.btn_create_receipt: base = "Create Receipt"
+        elif b == self.btn_create_receipt: base = "Create Manifest"
         else: base = bt
         
         # Wrapped focus check to prevent KeyError on system dialog names

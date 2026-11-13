@@ -15,7 +15,7 @@ It provides **three unified interfaces** powered by the exact same Rust core eng
 2. [Simple Mode vs. Advanced Mode (Tailored Guidance)](#-2-simple-mode-vs-advanced-mode-tailored-guidance)
 3. [Understanding the Transfer Queue & Status Badges](#-3-understanding-the-transfer-queue--status-badges)
 4. [Destination Paths & Processing Options](#-4-destination-paths--processing-options)
-5. [Receipts, Saved Rules & Priority Hierarchy](#-5-receipts-saved-rules--priority-hierarchy)
+5. [Upload Manifests (`Create Manifest`), Receipts & Priority Hierarchy](#-5-upload-manifests-create-manifest-receipts--priority-hierarchy)
 6. [Automating `No_ID` Transfers with Wildcard Patterns](#-6-automating-no_id-transfers-with-wildcard-patterns)
 7. [Personal vs. Team Workspaces & Rule Syncing](#-7-personal-vs-team-workspaces--rule-syncing)
 8. [Cross-Platform Windows ↔ Linux Path Translation](#-8-cross-platform-windows--linux-path-translation)
@@ -52,7 +52,7 @@ Inbox Mover is designed so **first-time users never feel overwhelmed** and **dai
 | **Target Audience** | First-time users & streamlined daily runs | Regular/advanced users & rule administrators |
 | **How to Toggle** | Click **✨ Simple Mode** in top bar (or press `a` in TUI) | Click **⚙ Advanced Mode** in top bar (or press `a` in TUI) |
 | **Smart Guidance Banner** | **ON** by default — explains folder state & next step | Toggle **OFF** permanently via **💡 Guide: OFF** (`Ctrl+G` / `g`) |
-| **Controls Shown** | Search 1, Queue, Destinations, Process, Save Rule, Open, Logs | Adds **Personal/Team Workspace Sync**, **Overrule Receipt**, **Search 2**, **Manage Rules**, and **Create Receipt** |
+| **Controls Shown** | Search 1, Queue, Destinations, Process, Save Rule, Open, Logs | Adds **Personal/Team Workspace Sync**, **Overrule Receipt**, **Search 2**, **Manage Rules**, and **Create Manifest** |
 
 > **Tip for Advanced Users**: On the initial Welcome screen, click **"Start in Power User Mode (No Banners)"** and check **"Don't show this welcome guide on startup"**. Your preference is saved in `permit_configs/settings.json` and remembered across both GUI and TUI sessions.
 
@@ -106,23 +106,29 @@ Every `transfer-*` folder found in `Search 1` and `Search 2` (scanned up to 2 di
 
 ---
 
-## ⚖ 5. Receipts, Saved Rules & Priority Hierarchy
+## ⚖ 5. Upload Manifests (`Create Manifest`), Receipts & Priority Hierarchy
 
-Incoming transfers can include a `receipt.json` (or `receipt_*.json`) either directly inside the `transfer-*` folder or packaged inside a `.zip` archive.
+Incoming transfers can include a portal-generated `receipt.json` (or `receipt_*.json`) and/or a user-created **`manifest.json`** (`manifest_*.json`), either directly inside the `transfer-*` folder or packaged inside a `.zip` archive.
+
+### Pre-Configuring Uploads for the User Portal (`Create Manifest`)
+In **Advanced Mode**, click **📋 Create Manifest** (`c` in TUI) to save your current Target Folder, Processed Folder, Receipt Folder, and processing options into a `manifest.json` file:
+1. Generate `manifest.json` using **Create Manifest**.
+2. When uploading your data in the **User Portal**, include `manifest.json` together with the files you upload.
+3. When the transfer arrives in the workspace Inbox, Inbox Mover automatically reads `manifest.json` (even inside the portal's `.zip` archive) alongside the portal's automatic `receipt.json`—preserving the portal's `permitId` and SHA-256 checksums while applying your `manifest.json` destination and processing rules!
 
 ### How Inbox Mover Resolves Rules
 
 #### Standard Mode (`Overrule receipt.json` is UNCHECKED)
-1. **Receipt Overrides**: Any paths or options explicitly defined inside `receipt.json` (`target_folder`, `process_folder`, `receipt_folder`, `auto_extract`, `conflict_resolution`, `post_processing`) are applied on top of your base rule.
-   - If the receipt's paths differ from your saved rule, Inbox Mover highlights **`• Modified`** and **`Save Rule *`** so you can see that the receipt customized the settings.
-2. **Saved Config ID (`<permitId>.json`)**: Matched using `permitId` (or `id` / `configId`) from `receipt.json`.
+1. **Manifest / Receipt Overrides**: Any paths or options explicitly defined inside `manifest.json` or `receipt.json` (`target_folder`, `process_folder`, `receipt_folder`, `auto_extract`, `conflict_resolution`, `post_processing`) are applied on top of your base rule.
+   - If these paths differ from your saved rule, Inbox Mover highlights **`• Modified`** and **`Save Rule *`** so you can see that the manifest/receipt customized the settings.
+2. **Saved Config ID (`<permitId>.json`)**: Matched using `permitId` (or `id` / `configId`) from `receipt.json` or `manifest.json`.
 3. **Saved Wildcard Pattern (`patterns.json`)**: Evaluated in order against the folder name, loose files, and filenames inside ZIP archives.
 4. **Workspace `DEFAULT.json`**: Global fallback rule when no specific ID or pattern matches.
 
 #### Overrule Mode (`Overrule receipt.json` is CHECKED)
 - When you check **Overrule receipt.json with saved rules** (`v` in TUI):
-  - Your saved **Config ID** (`<permitId>.json`) or **Wildcard Pattern** (`patterns.json`) takes **strict priority** over the paths inside `receipt.json`.
-  - Receipt values are only used if you have **no** saved rule matching the folder (and the receipt paths are compatible with your current OS).
+  - Your saved **Config ID** (`<permitId>.json`) or **Wildcard Pattern** (`patterns.json`) takes **strict priority** over the paths inside `manifest.json` / `receipt.json`.
+  - Manifest/receipt values are only used if you have **no** saved rule matching the folder (and the paths are compatible with your current OS).
 
 ---
 
@@ -208,7 +214,7 @@ The GUI and TUI share the same mental model and shortcut structure so you can sw
 | **Edit Target / Processed / Receipt**| Click Input / `Browse` | `t` (Target), `z` (Processed), `f` (Receipt) |
 | **Toggle Auto-Extract ZIPs** | Checkbox | `e` |
 | **Cycle Conflict / Post-Action** | Dropdown | `x` (Conflict), `u` (Post-Action) |
-| **Create Custom `receipt.json`** | `Create Receipt` Button | `c` |
+| **Create Upload `manifest.json`** | `Create Manifest` Button | `c` |
 | **Scale UI Font Size** | `A+` / `A-` Buttons | Terminal Zoom (`Ctrl++` / `Ctrl+-`) |
 | **Close Modal / Quit TUI** | `Esc` | `Esc` / `q` |
 

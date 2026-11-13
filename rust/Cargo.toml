@@ -1,6 +1,6 @@
 [package]
 name = "inbox-mover"
-version = "0.20.0"
+version = "0.21.0"
 edition = "2021"
 authors = ["Stefan van Aalst"]
 description = "Inbox Mover - Cross-platform transfer folder processor with GUI, TUI, and CLI in Rust"

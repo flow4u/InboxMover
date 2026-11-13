@@ -139,11 +139,15 @@ pub const QUICK_TIPS: &[(&str, &str)] = &[
     ),
     (
         "Simple Mode vs. Advanced Mode",
-        "• Simple Mode hides advanced rule management, secondary search paths, and workspace merging so beginners can focus on 1-click processing.\n• Advanced Mode unlocks Pattern Rules (*wildcards*), Team Workspace syncing, Receipt generation, and Overrule toggles.",
+        "• Simple Mode hides advanced rule management, secondary search paths, and workspace merging so beginners can focus on 1-click processing.\n• Advanced Mode unlocks Pattern Rules (*wildcards*), Team Workspace syncing, Create Manifest (manifest.json), and Overrule toggles.",
+    ),
+    (
+        "Pre-Configure User Portal Uploads (Create Manifest)",
+        "Click 'Create Manifest' (or press 'c' in TUI) to generate a `manifest.json` file with your desired Target Folder and processing settings.\nIf you include `manifest.json` along with your files when uploading in the User Portal, Inbox Mover automatically reads it alongside the portal's `receipt.json` and applies your settings!",
     ),
     (
         "How Rule Priority Works",
-        "By default, settings inside a transfer's `receipt.json` win first. Otherwise, Inbox Mover checks:\n1. Saved Config ID (`permitId` from receipt)\n2. Pattern Match (`*project*` against folder or file names)\n3. DEFAULT fallback rule.\nCheck 'Overrule receipt' if you always want your saved rules to win!",
+        "By default, settings inside a transfer's `manifest.json` or `receipt.json` win first. Otherwise, Inbox Mover checks:\n1. Saved Config ID (`permitId` from receipt/manifest)\n2. Pattern Match (`*project*` against folder or file names)\n3. DEFAULT fallback rule.\nCheck 'Overrule receipt' if you always want your saved rules to win!",
     ),
     (
         "Batch Processing Multiple Folders",
@@ -211,6 +215,12 @@ pub const SHORTCUTS: &[ShortcutEntry] = &[
         description: "Open the Configuration & Pattern Rules Manager",
     },
     ShortcutEntry {
+        key_gui: "Create Manifest Button",
+        key_tui: "c",
+        action: "Create Manifest",
+        description: "Generate a manifest.json file to include with uploads in the User Portal",
+    },
+    ShortcutEntry {
         key_gui: "Ctrl+G",
         key_tui: "g",
         action: "Toggle Smart Guide",
@@ -252,27 +262,34 @@ Inbox Mover automates unpacking, routing, and logging incoming data transfers (`
    - The source `transfer-*` folder is either **Moved**, **Deleted**, or **Left in Inbox** based on your setting.
 
 #### Simple Mode vs. Advanced Mode
-If you are new to Inbox Mover, switch to **Simple Mode** in the top bar. It declutters the interface to show only the essentials needed for daily processing. When you need pattern matching, receipt generation, or team workspace syncing, toggle **Advanced Mode** on anytime."#,
+If you are new to Inbox Mover, switch to **Simple Mode** in the top bar. It declutters the interface to show only the essentials needed for daily processing. When you need pattern matching, **Create Manifest** (`manifest.json` for User Portal uploads), or team workspace syncing, toggle **Advanced Mode** on anytime."#,
     },
     HelpSection {
         id: "receipts-and-priority",
-        title: "2. Receipts, Rules & Priority Hierarchy",
-        subtitle: "How Inbox Mover decides where files go and how 'Overrule receipt' works",
+        title: "2. Upload Manifests, Receipts & Priority",
+        subtitle: "Using 'Create Manifest' with the User Portal and how Inbox Mover resolves rules",
         badge: "CORE CONCEPT",
-        content: r#"### How Configuration Priority Works
+        content: r#"### Creating an Upload Manifest (`manifest.json`) for the User Portal
+In **Advanced Mode**, click **📋 Create Manifest** (or press `c` in the TUI) to export your current destination paths and processing options to a `manifest.json` file.
+
+- **Use with the User Portal**: When uploading files in the **User Portal**, include this `manifest.json` file alongside the files you are uploading.
+- **Automatic Reading & Merging**: When the transfer arrives in your workspace Inbox, Inbox Mover automatically finds and reads `manifest.json` (whether loose in the `transfer-*` folder or packaged inside the portal's `.zip` archive).
+- **Works Alongside Portal `receipt.json`**: The User Portal automatically generates its own `receipt.json` containing the transfer's `permitId`, timestamp, and SHA-256 checksums. Inbox Mover seamlessly merges both—keeping the portal's `permitId` and audit metadata from `receipt.json` while applying your destination folders and processing settings from `manifest.json`!
+
+### How Configuration Priority Works
 When you select a `transfer-*` folder, Inbox Mover determines its destination paths and behavior using a smart priority system:
 
 #### Default Behavior (`Overrule receipt` is OFF)
-1. **Receipt JSON (`receipt.json`)**: If a `receipt*.json` exists inside the folder or inside a `.zip`, its settings (`target_folder`, `process_folder`, `receipt_folder`, `conflict_resolution`, `post_processing`) take top priority.
+1. **Upload Manifest & Receipt JSON (`manifest.json` / `receipt.json`)**: If a `manifest*.json` or `receipt*.json` exists inside the folder or inside a `.zip`, its routing settings (`target_folder`, `process_folder`, `receipt_folder`, `conflict_resolution`, `post_processing`, `auto_extract`) take top priority.
    - If these settings differ from your saved rule, the Save button shows **`Save Rule *`** so you can optionally save them.
-2. **Saved Config ID (`<permitId>.json`)**: If the receipt has a `permitId` (or `id`/`configId`), Inbox Mover loads your saved rule for that ID.
+2. **Saved Config ID (`<permitId>.json`)**: If the receipt or manifest has a `permitId` (or `id`/`configId`), Inbox Mover loads your saved rule for that ID.
 3. **Saved Pattern Rule (`patterns.json`)**: If no Config ID exists (`No_ID`), Inbox Mover tests wildcard patterns (like `*project_alpha*` or `*.csv`) against the folder name and every file inside it (including inside ZIPs!).
 4. **`DEFAULT` Rule**: Your global fallback configuration.
 
 #### Power User Mode: `Overrule receipt` is ON
 When you check **Overrule receipt**:
-- Your saved **Config ID** or **Pattern Match** rule wins *even if* the incoming `receipt.json` asks for different folders!
-- This is essential when external senders embed their own folder paths in `receipt.json` that don't match your local project structure."#,
+- Your saved **Config ID** or **Pattern Match** rule wins *even if* the incoming `manifest.json` or `receipt.json` asks for different folders!
+- This is essential when external senders embed their own folder paths that don't match your local project structure."#,
     },
     HelpSection {
         id: "destinations-and-options",

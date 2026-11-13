@@ -1,4 +1,4 @@
-# **Inbox Mover (v0.20.0)**
+# **Inbox Mover (v0.21.0)**
 
 **Inbox Mover** is a cross-platform utility designed to process files in the **transfer-** folders found in **i:** and **z:\\inbox** on [**myDRE**](https://mydre.org)**.** 
 
@@ -157,9 +157,9 @@ The main area shows a combined view of all files in the source folder followed b
 
 * **Manageg Rules**: Here the pattern matching rules and config rules can be managed. See ? in the application for examples
 
-### **6\. CREATE <RECEIPT.JSON> FILES**
+### **6\. CREATE UPLOAD MANIFEST (`manifest.json`) FOR USER PORTAL UPLOADS**
 
-Easy create your own custom receipt.json file based on your settings that work both on Windows and Linux VMs. Just add the receipt*.json to your uploads!
+Click **Create Manifest** to generate a `manifest.json` file from your current destination and processing settings (works seamlessly across both Windows and Linux VMs). If you add `manifest.json` along with your files when uploading in the **User Portal**, Inbox Mover automatically reads it (alongside the portal's `receipt.json`) and applies your settings when the transfer arrives!
 
 ### **7\. Advanced Logging & Overrides**
 

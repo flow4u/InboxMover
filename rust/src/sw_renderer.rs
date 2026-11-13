@@ -708,22 +708,60 @@ mod tests {
         core_adv.app_settings.simple_mode = false;
         core_adv.app_settings.show_welcome_splash = false;
         let inbox_sim = temp_dir.join("sim_inbox");
+        let _ = std::fs::remove_dir_all(&inbox_sim);
         for n in 0..12 {
             let tf = inbox_sim.join(format!("transfer-2026-11-13-09-{n:02}-stefan.vanaalst"));
             let _ = std::fs::create_dir_all(&tf);
-            let _ = std::fs::write(tf.join("data.txt"), "payload");
+            if n == 11 {
+                // Create a realistic ZIP + Process.log + receipt.json with long SHA256 hashes
+                let zip_path = tf.join("sts-upload.zip");
+                if let Ok(zf_file) = std::fs::File::create(&zip_path) {
+                    let mut zw = zip::ZipWriter::new(zf_file);
+                    let opts = zip::write::SimpleFileOptions::default();
+                    for entry in [
+                        "inbox-mover-rust.exe",
+                        "inbox-mover-rust-gui.exe",
+                        "inbox-mover-rust-tui.exe",
+                        "inbox-mover-rust",
+                        "inbox-mover-rust-gui",
+                        "inbox-mover-rust-tui",
+                    ] {
+                        let _ = zw.start_file(entry, opts);
+                        let _ = std::io::Write::write_all(&mut zw, b"binary");
+                    }
+                    let _ = zw.finish();
+                }
+                let _ = std::fs::write(tf.join("Process.log"), "[2026-11-13 10:57:00] SUCCESS\n");
+                let _ = std::fs::write(
+                    tf.join("receipt.json"),
+                    r#"{
+  "timestamp": "2026-11-13T10:57:00Z",
+  "workspace": "myDRE-prod",
+  "permitId": "stefan10",
+  "auto_extract": true,
+  "checksums": {
+    "inbox-mover-rust.exe": "f161a883920b7151dbf6f43268046fdc9bf68e3369709da1122334455667788",
+    "inbox-mover-rust-gui.exe": "7151dbf6f43268046fdc9bf68e3369709daf161a883920b9988776655443322",
+    "inbox-mover-rust-tui.exe": "6f43268046fdc9bf68e3369709daf161a883920b7151dbf0011223344556677"
+  }
+}"#,
+                );
+            } else {
+                let _ = std::fs::write(tf.join("data.txt"), "payload");
+            }
         }
         core_adv.app_settings.search_folder_1 = inbox_sim.to_string_lossy().to_string();
         let ctx_adv = egui::Context::default();
         let mut app_adv = InboxMoverGuiApp::new_with_ctx(&ctx_adv, core_adv);
 
         for (w, h) in [(1240.0_f32, 800.0_f32), (920.0_f32, 620.0_f32)] {
-            for _ in 0..2 {
+            for pass in 0..2 {
                 let mut raw = egui::RawInput::default();
                 raw.screen_rect = Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(w, h)));
                 let out = ctx_adv.run(raw, |ctx| {
                     app_adv.render_ui(ctx);
                 });
+                rasterizer.apply_textures_delta(&out.textures_delta);
                 let prims = ctx_adv.tessellate(out.shapes, out.pixels_per_point);
                 for p in &prims {
                     if let Primitive::Mesh(mesh) = &p.primitive {
@@ -736,6 +774,21 @@ mod tests {
                                 );
                             }
                         }
+                    }
+                }
+                if pass == 1 && (w - 1240.0).abs() < 0.5 {
+                    if let Ok(ppm_path) = std::env::var("INBOX_MOVER_PREVIEW_PPM") {
+                        let clear_color = ctx_adv.style().visuals.panel_fill;
+                        rasterizer.render(&prims, out.pixels_per_point, 1240, 800, clear_color);
+                        let mut ppm = Vec::with_capacity(1240 * 800 * 3 + 64);
+                        ppm.extend_from_slice(b"P6\n1240 800\n255\n");
+                        for &px in &rasterizer.fb {
+                            let r = ((px >> 16) & 0xFF) as u8;
+                            let g = ((px >> 8) & 0xFF) as u8;
+                            let b = (px & 0xFF) as u8;
+                            ppm.extend_from_slice(&[r, g, b]);
+                        }
+                        let _ = std::fs::write(ppm_path, ppm);
                     }
                 }
             }

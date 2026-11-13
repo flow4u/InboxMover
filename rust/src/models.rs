@@ -131,24 +131,38 @@ impl Default for ConfigRule {
     }
 }
 
-/// Deserialized content of a `receipt*.json` file.
+/// Deserialized content of a `receipt*.json` or `manifest*.json` file.
 #[derive(Debug, Clone, PartialEq, Eq, Serialize, Deserialize, Default)]
 pub struct ReceiptData {
-    #[serde(default, rename = "permitId", alias = "permit_id")]
+    #[serde(
+        default,
+        rename = "permitId",
+        alias = "permit_id",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub permit_id: Option<String>,
-    #[serde(default)]
+    #[serde(
+        default,
+        alias = "auto_unzip",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub auto_extract: Option<bool>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub target_folder: Option<String>,
-    #[serde(default, alias = "target_zip_folder")]
+    #[serde(
+        default,
+        alias = "target_zip_folder",
+        alias = "processed_folder",
+        skip_serializing_if = "Option::is_none"
+    )]
     pub process_folder: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub receipt_folder: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub conflict_resolution: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub post_processing: Option<String>,
-    #[serde(default)]
+    #[serde(default, skip_serializing_if = "Option::is_none")]
     pub processing_logs: Option<Vec<serde_json::Value>>,
 }
 

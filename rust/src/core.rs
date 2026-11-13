@@ -471,10 +471,11 @@ impl InboxMoverCore {
 
         let mut valid_zip_found = false;
         let mut loose_receipt_data: Option<ReceiptData> = None;
-        let mut loose_receipt_raw = String::new();
-        let mut has_loose_receipt = false;
+        let mut loose_manifest_data: Option<ReceiptData> = None;
+        let mut loose_manifest_sections: Vec<(String, String)> = Vec::new();
+        let mut loose_receipt_sections: Vec<(String, String)> = Vec::new();
 
-        // Traverse files
+        // Traverse loose files
         for entry in WalkDir::new(folder_path).into_iter().flatten() {
             let p = entry.path();
             if p.is_file() {
@@ -482,24 +483,38 @@ impl InboxMoverCore {
                     let rel_str = rel.to_string_lossy().to_string();
                     data.file_list.push(rel_str.clone());
 
-                    let file_lower = p.file_name().and_then(|n| n.to_str()).unwrap_or("").to_lowercase();
-                    
-                    // Loose receipt match: receipt*.json or reciept*.json
-                    if is_receipt_filename(&file_lower) {
-                        has_loose_receipt = true;
-                        if let Ok(content) = fs::read_to_string(p) {
-                            if loose_receipt_raw.is_empty() {
-                                loose_receipt_raw = content.clone();
-                            } else {
-                                loose_receipt_raw.push_str(&format!("\n\n--- OTHER RECEIPT: {file_lower} ---\n{content}"));
-                            }
+                    let file_name = p.file_name().and_then(|n| n.to_str()).unwrap_or("");
+                    let file_lower = file_name.to_lowercase();
 
+                    if is_manifest_filename(&file_lower) {
+                        if let Ok(content) = fs::read_to_string(p) {
+                            loose_manifest_sections.push((
+                                format!("MANIFEST: {file_name}"),
+                                content.clone(),
+                            ));
+                            if loose_manifest_data.is_none() && !content.trim().is_empty() {
+                                match serde_json::from_str::<ReceiptData>(&content) {
+                                    Ok(parsed) => loose_manifest_data = Some(parsed),
+                                    Err(e) => {
+                                        data.receipt_warning = Some(format!(
+                                            "[WARNING: {file_name} is not a valid JSON file: {e}]"
+                                        ));
+                                    }
+                                }
+                            }
+                        }
+                    } else if is_receipt_filename(&file_lower) {
+                        if let Ok(content) = fs::read_to_string(p) {
+                            loose_receipt_sections.push((
+                                format!("RECEIPT: {file_name}"),
+                                content.clone(),
+                            ));
                             if loose_receipt_data.is_none() && !content.trim().is_empty() {
                                 match serde_json::from_str::<ReceiptData>(&content) {
                                     Ok(parsed) => loose_receipt_data = Some(parsed),
                                     Err(e) => {
                                         data.receipt_warning = Some(format!(
-                                            "[WARNING: {file_lower} is not a valid JSON file: {e}]"
+                                            "[WARNING: {file_name} is not a valid JSON file: {e}]"
                                         ));
                                     }
                                 }
@@ -509,6 +524,13 @@ impl InboxMoverCore {
                 }
             }
         }
+
+        data.file_list.sort();
+
+        let mut zip_receipt_data: Option<ReceiptData> = None;
+        let mut zip_manifest_data: Option<ReceiptData> = None;
+        let mut zip_manifest_sections: Vec<(String, String)> = Vec::new();
+        let mut zip_receipt_sections: Vec<(String, String)> = Vec::new();
 
         // Check for ZIP archives
         for entry in WalkDir::new(folder_path).into_iter().flatten() {
@@ -520,80 +542,136 @@ impl InboxMoverCore {
                         data.has_valid_zip = true;
                         valid_zip_found = true;
 
-                        if has_loose_receipt {
-                            data.receipt = loose_receipt_data.clone();
-                            data.receipt_raw = if loose_receipt_raw.trim().is_empty() {
-                                "<receipt files are empty>".to_string()
-                            } else {
-                                loose_receipt_raw.clone()
-                            };
-                            if let Some(ref r) = loose_receipt_data {
-                                if let Some(ref pid) = r.permit_id {
-                                    data.permit_id = pid.clone();
-                                }
-                            }
-                        } else {
-                            // Inspect inside the zip
-                            let (zip_r, zip_raw, zip_files, is_enc) = self.inspect_zip(p);
-                            data.zip_contents = zip_files;
-                            data.is_encrypted_zip = is_enc;
-                            if !zip_raw.is_empty() {
-                                data.receipt_raw = zip_raw;
-                                if let Some(r) = zip_r {
-                                    if let Some(ref pid) = r.permit_id {
-                                        data.permit_id = pid.clone();
-                                    }
-                                    data.receipt = Some(r);
-                                }
-                            }
-                        }
+                        let (zr, zm, z_man_sec, z_rec_sec, zip_files, is_enc) =
+                            self.inspect_zip_detailed(p);
+                        data.zip_contents = zip_files;
+                        data.is_encrypted_zip = is_enc;
+                        zip_receipt_data = zr;
+                        zip_manifest_data = zm;
+                        zip_manifest_sections = z_man_sec;
+                        zip_receipt_sections = z_rec_sec;
                         break;
                     }
                 }
             }
         }
 
-        if !valid_zip_found {
-            if has_loose_receipt {
-                data.receipt = loose_receipt_data.clone();
-                data.receipt_raw = if loose_receipt_raw.trim().is_empty() {
-                    "<receipt files are empty>".to_string()
+        // Combine loose + ZIP receipts and manifests:
+        // - Portal receipt.json provides permitId/metadata;
+        // - User manifest.json overrides routing & processing settings!
+        let effective_receipt = loose_receipt_data.or(zip_receipt_data);
+        let effective_manifest = loose_manifest_data.or(zip_manifest_data);
+        let merged = merge_receipt_and_manifest(effective_receipt, effective_manifest);
+
+        let mut all_sections: Vec<(String, String)> = Vec::new();
+        all_sections.extend(loose_manifest_sections);
+        all_sections.extend(zip_manifest_sections);
+        all_sections.extend(loose_receipt_sections);
+        all_sections.extend(zip_receipt_sections);
+
+        if !all_sections.is_empty() {
+            if all_sections.len() == 1 {
+                let raw = &all_sections[0].1;
+                data.receipt_raw = if raw.trim().is_empty() {
+                    "<manifest/receipt file is empty>".to_string()
                 } else {
-                    loose_receipt_raw
+                    raw.clone()
                 };
-                if let Some(ref r) = loose_receipt_data {
-                    if let Some(ref pid) = r.permit_id {
-                        data.permit_id = pid.clone();
+            } else {
+                let mut combined = String::new();
+                for (idx, (header, body)) in all_sections.iter().enumerate() {
+                    if idx > 0 {
+                        combined.push_str("\n\n");
+                    }
+                    combined.push_str(&format!("// --- {header} ---\n"));
+                    if body.trim().is_empty() {
+                        combined.push_str("<empty>");
+                    } else {
+                        combined.push_str(body.trim_end());
                     }
                 }
-                data.can_process = true;
-            } else if data.file_list.is_empty() {
-                data.can_process = false;
-            } else {
-                data.can_process = true;
+                data.receipt_raw = combined;
             }
-        } else {
-            data.can_process = true;
         }
+
+        if let Some(ref r) = merged {
+            if let Some(ref pid) = r.permit_id {
+                if !pid.trim().is_empty() {
+                    data.permit_id = pid.clone();
+                }
+            }
+        }
+        data.receipt = merged;
+
+        data.can_process = valid_zip_found || !all_sections.is_empty() || !data.file_list.is_empty();
 
         data
     }
 
-    /// Inspects a ZIP archive without full extraction to gather contents and receipt JSON.
+    /// Inspects a ZIP archive without full extraction to gather contents and merged receipt/manifest JSON.
     pub fn inspect_zip(&self, zip_path: &Path) -> (Option<ReceiptData>, String, Vec<String>, bool) {
+        let (zr, zm, z_man_sec, z_rec_sec, files, enc) = self.inspect_zip_detailed(zip_path);
+        let merged = merge_receipt_and_manifest(zr, zm);
+        let mut all_sec = z_man_sec;
+        all_sec.extend(z_rec_sec);
+        let raw = if all_sec.is_empty() {
+            String::new()
+        } else if all_sec.len() == 1 {
+            all_sec.remove(0).1
+        } else {
+            all_sec
+                .into_iter()
+                .map(|(h, b)| format!("// --- {h} ---\n{}", b.trim_end()))
+                .collect::<Vec<_>>()
+                .join("\n\n")
+        };
+        (merged, raw, files, enc)
+    }
+
+    fn inspect_zip_detailed(
+        &self,
+        zip_path: &Path,
+    ) -> (
+        Option<ReceiptData>,
+        Option<ReceiptData>,
+        Vec<(String, String)>,
+        Vec<(String, String)>,
+        Vec<String>,
+        bool,
+    ) {
         let mut receipt_data = None;
-        let mut raw_content = String::new();
+        let mut manifest_data = None;
+        let mut manifest_sections = Vec::new();
+        let mut receipt_sections = Vec::new();
         let mut file_names = Vec::new();
         let mut is_encrypted = false;
 
         let file = match File::open(zip_path) {
             Ok(f) => f,
-            Err(_) => return (None, String::new(), Vec::new(), false),
+            Err(_) => {
+                return (
+                    None,
+                    None,
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                    false,
+                )
+            }
         };
 
         let mut archive = match ZipArchive::new(file) {
             Ok(a) => a,
-            Err(_) => return (None, String::new(), Vec::new(), false),
+            Err(_) => {
+                return (
+                    None,
+                    None,
+                    Vec::new(),
+                    Vec::new(),
+                    Vec::new(),
+                    false,
+                )
+            }
         };
 
         for i in 0..archive.len() {
@@ -605,21 +683,43 @@ impl InboxMoverCore {
                     is_encrypted = true;
                 }
 
-                let base_name = Path::new(&name)
+                let orig_base = Path::new(&name)
                     .file_name()
                     .and_then(|n| n.to_str())
-                    .unwrap_or("")
-                    .to_lowercase();
+                    .unwrap_or("");
+                let base_name = orig_base.to_lowercase();
 
-                if is_receipt_filename(&base_name) {
+                if is_manifest_filename(&base_name) {
                     let mut buf = String::new();
                     match zip_file.read_to_string(&mut buf) {
                         Ok(_) => {
-                            if raw_content.is_empty() {
-                                raw_content = buf.clone();
-                            } else {
-                                raw_content.push_str(&format!("\n\n--- OTHER RECEIPT IN ZIP: {base_name} ---\n{buf}"));
+                            manifest_sections.push((
+                                format!("MANIFEST IN ZIP: {orig_base}"),
+                                buf.clone(),
+                            ));
+                            if manifest_data.is_none() {
+                                if let Ok(parsed) = serde_json::from_str::<ReceiptData>(&buf) {
+                                    manifest_data = Some(parsed);
+                                }
                             }
+                        }
+                        Err(_) => {
+                            if zip_file.encrypted() {
+                                manifest_sections.push((
+                                    format!("MANIFEST IN ZIP: {orig_base}"),
+                                    format!("<{orig_base} is password protected>"),
+                                ));
+                            }
+                        }
+                    }
+                } else if is_receipt_filename(&base_name) {
+                    let mut buf = String::new();
+                    match zip_file.read_to_string(&mut buf) {
+                        Ok(_) => {
+                            receipt_sections.push((
+                                format!("RECEIPT IN ZIP: {orig_base}"),
+                                buf.clone(),
+                            ));
                             if receipt_data.is_none() {
                                 if let Ok(parsed) = serde_json::from_str::<ReceiptData>(&buf) {
                                     receipt_data = Some(parsed);
@@ -628,7 +728,10 @@ impl InboxMoverCore {
                         }
                         Err(_) => {
                             if zip_file.encrypted() {
-                                raw_content.push_str(&format!("\n<{base_name} is password protected>"));
+                                receipt_sections.push((
+                                    format!("RECEIPT IN ZIP: {orig_base}"),
+                                    format!("<{orig_base} is password protected>"),
+                                ));
                             }
                         }
                     }
@@ -636,7 +739,14 @@ impl InboxMoverCore {
             }
         }
 
-        (receipt_data, raw_content, file_names, is_encrypted)
+        (
+            receipt_data,
+            manifest_data,
+            manifest_sections,
+            receipt_sections,
+            file_names,
+            is_encrypted,
+        )
     }
 
     /// Resolves the effective configuration for a folder according to rule hierarchy:
@@ -1003,10 +1113,10 @@ impl InboxMoverCore {
                     .strip_prefix(folder_path)
                     .unwrap_or(file_path);
 
-                let is_receipt = is_receipt_filename(&file_name_low);
+                let is_receipt = is_metadata_json_filename(&file_name_low);
                 let final_dest = if is_receipt {
                     let timestamp = Local::now().format("%y%m%d-%H%M%S").to_string();
-                    let new_name = format!("{timestamp}-{}", file_path.file_name().and_then(|n| n.to_str()).unwrap_or("receipt.json"));
+                    let new_name = format!("{timestamp}-{}", file_path.file_name().and_then(|n| n.to_str()).unwrap_or("manifest.json"));
                     if let Some(ref rd) = receipt_dir {
                         rd.join(new_name)
                     } else {
@@ -1174,7 +1284,7 @@ impl InboxMoverCore {
                 .unwrap_or("")
                 .to_lowercase();
 
-            let target_file_path = if is_receipt_filename(&base_entry_name) {
+            let target_file_path = if is_metadata_json_filename(&base_entry_name) {
                 let timestamp = Local::now().format("%y%m%d-%H%M%S").to_string();
                 let new_name = format!("{timestamp}-{base_entry_name}");
                 if let Some(rd) = receipt_dir {
@@ -1305,7 +1415,7 @@ impl InboxMoverCore {
             }
         }
 
-        // 3. Inject into destination receipt*.json files
+        // 3. Inject into destination receipt*.json / manifest*.json files
         for act in actions {
             let dest = &act.destination;
             if dest.ends_with(".json") {
@@ -1314,7 +1424,7 @@ impl InboxMoverCore {
                     .and_then(|n| n.to_str())
                     .unwrap_or("")
                     .to_lowercase();
-                if is_receipt_filename(&base) {
+                if is_metadata_json_filename(&base) {
                     let dest_path = PathBuf::from(dest);
                     if dest_path.exists() {
                         if let Ok(content) = fs::read_to_string(&dest_path) {
@@ -1336,25 +1446,47 @@ impl InboxMoverCore {
         }
     }
 
-    /// Creates a customized `receipt.json` file on disk.
-    pub fn create_receipt_file(&self, path: &Path, config: &ConfigRule, permit_id: Option<&str>) -> std::io::Result<()> {
-        let receipt = ReceiptData {
-            permit_id: permit_id.map(|s| s.to_string()),
+    /// Creates a customized `manifest.json` (or `receipt.json`) file on disk to upload via the User Portal.
+    pub fn create_manifest_file(
+        &self,
+        path: &Path,
+        config: &ConfigRule,
+        permit_id: Option<&str>,
+    ) -> std::io::Result<()> {
+        let cleaned_pid = permit_id
+            .map(|s| s.trim())
+            .filter(|s| !s.is_empty() && *s != "DEFAULT" && *s != "No_ID")
+            .map(|s| s.to_string());
+
+        let manifest = ReceiptData {
+            permit_id: cleaned_pid,
             auto_extract: Some(config.auto_extract),
-            target_folder: Some(config.target_folder.clone()),
-            process_folder: Some(config.target_zip_folder.clone()),
-            receipt_folder: Some(config.receipt_folder.clone()),
+            target_folder: Some(config.target_folder.clone()).filter(|s| !s.trim().is_empty()),
+            process_folder: Some(config.target_zip_folder.clone()).filter(|s| !s.trim().is_empty()),
+            receipt_folder: Some(config.receipt_folder.clone()).filter(|s| !s.trim().is_empty()),
             conflict_resolution: Some(config.conflict_action.as_str().to_string()),
             post_processing: Some(config.post_action.as_str().to_string()),
             processing_logs: None,
         };
 
         if let Some(parent) = path.parent() {
-            fs::create_dir_all(parent)?;
+            if !parent.as_os_str().is_empty() {
+                fs::create_dir_all(parent)?;
+            }
         }
-        let json = serde_json::to_string_pretty(&receipt)?;
+        let json = serde_json::to_string_pretty(&manifest)?;
         fs::write(path, json)?;
         Ok(())
+    }
+
+    /// Backwards-compatible alias for `create_manifest_file`.
+    pub fn create_receipt_file(
+        &self,
+        path: &Path,
+        config: &ConfigRule,
+        permit_id: Option<&str>,
+    ) -> std::io::Result<()> {
+        self.create_manifest_file(path, config, permit_id)
     }
 }
 
@@ -1365,6 +1497,55 @@ fn is_receipt_filename(name: &str) -> bool {
         || n.contains("-receipt")
         || n.contains("-reciept"))
         && n.ends_with(".json")
+}
+
+fn is_manifest_filename(name: &str) -> bool {
+    let n = name.to_lowercase();
+    (n.starts_with("manifest") || n.contains("-manifest")) && n.ends_with(".json")
+}
+
+fn is_metadata_json_filename(name: &str) -> bool {
+    is_receipt_filename(name) || is_manifest_filename(name)
+}
+
+fn merge_receipt_and_manifest(
+    receipt: Option<ReceiptData>,
+    manifest: Option<ReceiptData>,
+) -> Option<ReceiptData> {
+    match (receipt, manifest) {
+        (None, None) => None,
+        (Some(r), None) => Some(r),
+        (None, Some(m)) => Some(m),
+        (Some(mut r), Some(m)) => {
+            if let Some(mpid) = m.permit_id {
+                let trimmed = mpid.trim();
+                if !trimmed.is_empty() && trimmed != "DEFAULT" && trimmed != "No_ID" {
+                    r.permit_id = Some(mpid);
+                } else if r.permit_id.as_deref().map_or(true, |p| p.trim().is_empty()) {
+                    r.permit_id = Some(mpid);
+                }
+            }
+            if let Some(tf) = m.target_folder.filter(|s| !s.trim().is_empty()) {
+                r.target_folder = Some(tf);
+            }
+            if let Some(pf) = m.process_folder.filter(|s| !s.trim().is_empty()) {
+                r.process_folder = Some(pf);
+            }
+            if let Some(rf) = m.receipt_folder.filter(|s| !s.trim().is_empty()) {
+                r.receipt_folder = Some(rf);
+            }
+            if let Some(cr) = m.conflict_resolution.filter(|s| !s.trim().is_empty()) {
+                r.conflict_resolution = Some(cr);
+            }
+            if let Some(pp) = m.post_processing.filter(|s| !s.trim().is_empty()) {
+                r.post_processing = Some(pp);
+            }
+            if let Some(ae) = m.auto_extract {
+                r.auto_extract = Some(ae);
+            }
+            Some(r)
+        }
+    }
 }
 
 fn copy_dir_all(src: &Path, dst: &Path) -> std::io::Result<()> {
@@ -1491,6 +1672,68 @@ mod tests {
         let logs = core.read_global_logs(50);
         assert_eq!(logs.len(), 1);
         assert_eq!(logs[0].config_id, "PERMIT-E2E");
+
+        let _ = fs::remove_dir_all(&tmp_dir);
+    }
+
+    #[test]
+    fn test_portal_receipt_and_user_manifest_merge() {
+        let tmp_dir = std::env::temp_dir().join(format!("inbox_mover_man_{}", std::process::id()));
+        let _ = fs::remove_dir_all(&tmp_dir);
+        let transfer_dir = tmp_dir.join("inbox").join("transfer-portal-upload");
+        let target_dir = tmp_dir.join("manifest_target");
+        let archive_dir = tmp_dir.join("manifest_processed");
+        fs::create_dir_all(&transfer_dir).unwrap();
+
+        let core = InboxMoverCore::with_base_dir(&tmp_dir);
+
+        // User generates manifest.json via "Create Manifest" (with DEFAULT permitId)
+        let manifest_path = tmp_dir.join("manifest.json");
+        let user_rule = ConfigRule {
+            auto_extract: true,
+            target_folder: target_dir.to_string_lossy().to_string(),
+            target_zip_folder: archive_dir.to_string_lossy().to_string(),
+            receipt_folder: String::new(),
+            conflict_action: ConflictAction::KeepBoth,
+            post_action: PostAction::Move,
+        };
+        core.create_manifest_file(&manifest_path, &user_rule, Some("DEFAULT"))
+            .unwrap();
+        let manifest_str = fs::read_to_string(&manifest_path).unwrap();
+
+        // Portal packages data + portal's receipt.json + user's manifest.json into sts-upload.zip
+        let zip_path = transfer_dir.join("sts-upload.zip");
+        {
+            let zf = File::create(&zip_path).unwrap();
+            let mut zw = zip::ZipWriter::new(zf);
+            let opts = zip::write::SimpleFileOptions::default();
+            zw.start_file("receipt.json", opts).unwrap();
+            zw.write_all(
+                br#"{"timestamp":"2026-11-13T12:00:00Z","workspace":"myDRE","permitId":"PORTAL-PERMIT-42"}"#,
+            )
+            .unwrap();
+            zw.start_file("manifest.json", opts).unwrap();
+            zw.write_all(manifest_str.as_bytes()).unwrap();
+            zw.start_file("study_results.csv", opts).unwrap();
+            zw.write_all(b"id,val\n1,99\n").unwrap();
+            zw.finish().unwrap();
+        }
+
+        let fd = core.inspect_transfer_folder(&transfer_dir);
+        // permitId must come from the portal's receipt.json!
+        assert_eq!(fd.permit_id, "PORTAL-PERMIT-42");
+        // Routing settings must come from the user's manifest.json!
+        let (resolved_rule, _src, _mod) = core.resolve_rule_for_folder(Some(&fd));
+        assert_eq!(
+            resolved_rule.target_folder,
+            target_dir.to_string_lossy().to_string()
+        );
+        assert_eq!(
+            resolved_rule.target_zip_folder,
+            archive_dir.to_string_lossy().to_string()
+        );
+        assert_eq!(resolved_rule.conflict_action, ConflictAction::KeepBoth);
+        assert_eq!(resolved_rule.post_action, PostAction::Move);
 
         let _ = fs::remove_dir_all(&tmp_dir);
     }

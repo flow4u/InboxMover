@@ -1776,11 +1776,11 @@ impl InboxMoverGuiApp {
 
                                         if ui
                                             .add(
-                                                egui::Button::new("📋 Create Receipt")
+                                                egui::Button::new("📋 Create Manifest")
                                                     .min_size(Vec2::new(0.0, 32.0)),
                                             )
                                             .on_hover_text(
-                                                "Generate a standalone receipt.json file from current settings",
+                                                "Generate a manifest.json file from current settings to include with uploads in the User Portal",
                                             )
                                             .clicked()
                                         {
@@ -1793,11 +1793,11 @@ impl InboxMoverGuiApp {
                                                 .as_ref()
                                                 .map(|f| {
                                                     f.folder_path
-                                                        .join("receipt.json")
+                                                        .join("manifest.json")
                                                         .to_string_lossy()
                                                         .to_string()
                                                 })
-                                                .unwrap_or_else(|| "receipt.json".to_string());
+                                                .unwrap_or_else(|| "manifest.json".to_string());
                                             self.show_create_receipt_modal = true;
                                         }
                                     }
@@ -1823,168 +1823,381 @@ impl InboxMoverGuiApp {
                         ui.add_space(12.0);
 
                         // 5. Split Inspector: Package Files & Archive Tree (Left) + Receipt JSON Inspector (Right)
-                        // Explicitly sized cards so neither column can ever clip past the right window edge.
-                        let render_files_card = |ui: &mut egui::Ui, inner_w: f32| {
+                        // Explicitly sized vertical columns & inset monospace code panes so neither card
+                        // ever inherits horizontal layout or clips past the right window edge.
+                        let mono_size = (11.0 * font_scale).clamp(10.0, 22.0);
+                        let inspector_scroll_h = (ui.available_height() - 80.0).clamp(108.0, 460.0);
+
+                        let render_files_card = |ui: &mut egui::Ui, inner_w: f32, scroll_h: f32| {
                             egui::Frame::none()
                                 .fill(p.surface_container)
                                 .rounding(Rounding::same(12.0))
                                 .inner_margin(Margin::same(12.0))
                                 .stroke(Stroke::new(1.0_f32, p.outline_variant))
                                 .show(ui, |ui| {
-                                    ui.set_min_width(inner_w);
-                                    ui.set_max_width(inner_w);
-                                    ui.label(
-                                        RichText::new("📦 Package Files & ZIP Contents").strong(),
-                                    );
-                                    ui.separator();
-                                    egui::ScrollArea::vertical()
-                                        .id_salt("files_inspector_scroll")
-                                        .max_height(260.0)
-                                        .auto_shrink([false, false])
-                                        .show(ui, |ui| {
-                                            let scroll_w = (inner_w - 6.0).max(120.0);
-                                            ui.set_max_width(scroll_w);
+                                    ui.vertical(|ui| {
+                                        ui.set_min_width(inner_w);
+                                        ui.set_max_width(inner_w);
+
+                                        ui.horizontal(|ui| {
+                                            ui.label(
+                                                RichText::new("📦 Package Files & ZIP Contents")
+                                                    .strong(),
+                                            );
                                             if let Some(ref f) = current_folder {
-                                                if f.file_list.is_empty() {
-                                                    ui.add(
-                                                        egui::Label::new(
-                                                            RichText::new("Folder is empty.")
-                                                                .color(p.on_surface_variant),
-                                                        )
-                                                        .wrap(),
-                                                    );
+                                                let summary = if f.zip_contents.is_empty() {
+                                                    format!("{} file(s)", f.file_list.len())
                                                 } else {
-                                                    for item in &f.file_list {
-                                                        let is_zip =
-                                                            item.to_lowercase().ends_with(".zip");
-                                                        ui.add(
-                                                            egui::Label::new(
-                                                                RichText::new(item)
-                                                                    .monospace()
-                                                                    .small()
-                                                                    .color(if is_zip {
-                                                                        p.primary
-                                                                    } else {
-                                                                        p.on_surface
-                                                                    }),
-                                                            )
-                                                            .wrap(),
-                                                        );
-                                                        if is_zip {
-                                                            for zc in &f.zip_contents {
-                                                                ui.add(
-                                                                    egui::Label::new(
-                                                                        RichText::new(format!(
-                                                                            "  └─ {zc}"
-                                                                        ))
-                                                                        .monospace()
-                                                                        .small()
-                                                                        .color(
-                                                                            p.on_surface_variant,
-                                                                        ),
-                                                                    )
-                                                                    .wrap(),
-                                                                );
-                                                            }
-                                                        }
-                                                    }
-                                                }
-                                            } else {
-                                                ui.add(
-                                                    egui::Label::new(
-                                                        RichText::new(
-                                                            "Select a transfer folder to inspect its contents.",
-                                                        )
-                                                        .color(p.on_surface_variant),
+                                                    format!(
+                                                        "{} file(s) • {} in ZIP",
+                                                        f.file_list.len(),
+                                                        f.zip_contents.len()
                                                     )
-                                                    .wrap(),
+                                                };
+                                                ui.with_layout(
+                                                    egui::Layout::right_to_left(
+                                                        egui::Align::Center,
+                                                    ),
+                                                    |ui| {
+                                                        ui.label(
+                                                            RichText::new(summary)
+                                                                .small()
+                                                                .color(p.on_surface_variant),
+                                                        );
+                                                    },
                                                 );
                                             }
                                         });
+                                        ui.separator();
+
+                                        let code_box_w = (inner_w - 16.0).max(110.0);
+                                        egui::Frame::none()
+                                            .fill(p.surface_container_low)
+                                            .rounding(Rounding::same(8.0))
+                                            .inner_margin(Margin::same(8.0))
+                                            .show(ui, |ui| {
+                                                ui.allocate_ui_with_layout(
+                                                    Vec2::new(code_box_w, scroll_h),
+                                                    egui::Layout::top_down(egui::Align::Min),
+                                                    |ui| {
+                                                        ui.set_clip_rect(ui.max_rect());
+                                                        egui::ScrollArea::both()
+                                                            .id_salt("files_inspector_scroll")
+                                                            .min_scrolled_height(scroll_h)
+                                                            .max_height(scroll_h)
+                                                            .max_width(code_box_w)
+                                                            .auto_shrink([false, false])
+                                                            .show(ui, |ui| {
+                                                                ui.vertical(|ui| {
+                                                                    let scroll_w = (code_box_w
+                                                                        - 8.0)
+                                                                        .max(100.0);
+                                                                    ui.set_min_width(scroll_w);
+                                                                    ui.spacing_mut()
+                                                                        .item_spacing
+                                                                        .y = 3.0;
+
+                                                                    if let Some(ref f) =
+                                                                        current_folder
+                                                                    {
+                                                                        if f.file_list.is_empty() {
+                                                                            ui.set_max_width(
+                                                                                scroll_w,
+                                                                            );
+                                                                            ui.add(
+                                                                                egui::Label::new(
+                                                                                    RichText::new(
+                                                                                        "Folder is empty.",
+                                                                                    )
+                                                                                    .color(
+                                                                                        p.on_surface_variant,
+                                                                                    ),
+                                                                                )
+                                                                                .wrap(),
+                                                                            );
+                                                                        } else {
+                                                                            for item in &f.file_list
+                                                                            {
+                                                                                let is_zip = item
+                                                                                    .to_lowercase()
+                                                                                    .ends_with(
+                                                                                        ".zip",
+                                                                                    );
+                                                                                let mut item_rt =
+                                                                                    RichText::new(
+                                                                                        item,
+                                                                                    )
+                                                                                    .font(
+                                                                                        egui::FontId::monospace(
+                                                                                            mono_size,
+                                                                                        ),
+                                                                                    )
+                                                                                    .color(
+                                                                                        if is_zip {
+                                                                                            p.primary
+                                                                                        } else {
+                                                                                            p.on_surface
+                                                                                        },
+                                                                                    );
+                                                                                if is_zip {
+                                                                                    item_rt =
+                                                                                        item_rt
+                                                                                            .strong();
+                                                                                }
+                                                                                ui.add(
+                                                                                    egui::Label::new(
+                                                                                        item_rt,
+                                                                                    )
+                                                                                    .extend(),
+                                                                                );
+                                                                                if is_zip {
+                                                                                    let zlen = f
+                                                                                        .zip_contents
+                                                                                        .len();
+                                                                                    for (zi, zc) in
+                                                                                        f.zip_contents
+                                                                                            .iter()
+                                                                                            .enumerate()
+                                                                                    {
+                                                                                        let branch =
+                                                                                            if zi
+                                                                                                + 1
+                                                                                                == zlen
+                                                                                            {
+                                                                                                "└─"
+                                                                                            } else {
+                                                                                                "├─"
+                                                                                            };
+                                                                                        ui.add(
+                                                                                            egui::Label::new(
+                                                                                                RichText::new(
+                                                                                                    format!(
+                                                                                                        "  {branch} {zc}"
+                                                                                                    ),
+                                                                                                )
+                                                                                                .font(
+                                                                                                    egui::FontId::monospace(
+                                                                                                        mono_size,
+                                                                                                    ),
+                                                                                                )
+                                                                                                .color(
+                                                                                                    p.on_surface_variant,
+                                                                                                ),
+                                                                                            )
+                                                                                            .extend(),
+                                                                                        );
+                                                                                    }
+                                                                                }
+                                                                            }
+                                                                        }
+                                                                    } else {
+                                                                        ui.set_max_width(scroll_w);
+                                                                        ui.add(
+                                                                            egui::Label::new(
+                                                                                RichText::new(
+                                                                                    "Select a transfer folder to inspect its contents.",
+                                                                                )
+                                                                                .color(
+                                                                                    p.on_surface_variant,
+                                                                                ),
+                                                                            )
+                                                                            .wrap(),
+                                                                        );
+                                                                    }
+                                                                });
+                                                            });
+                                                    },
+                                                );
+                                            });
+                                    });
                                 });
                         };
 
-                        let render_receipt_card = |ui: &mut egui::Ui, inner_w: f32| {
-                            egui::Frame::none()
-                                .fill(p.surface_container)
-                                .rounding(Rounding::same(12.0))
-                                .inner_margin(Margin::same(12.0))
-                                .stroke(Stroke::new(1.0_f32, p.outline_variant))
-                                .show(ui, |ui| {
-                                    ui.set_min_width(inner_w);
-                                    ui.set_max_width(inner_w);
-                                    ui.horizontal_wrapped(|ui| {
-                                        ui.label(
-                                            RichText::new("📋 Receipt JSON Inspector").strong(),
-                                        );
-                                        if let Some(ref f) = current_folder {
-                                            if f.receipt_warning.is_some() {
+                        let render_receipt_card =
+                            |ui: &mut egui::Ui, inner_w: f32, scroll_h: f32| {
+                                egui::Frame::none()
+                                    .fill(p.surface_container)
+                                    .rounding(Rounding::same(12.0))
+                                    .inner_margin(Margin::same(12.0))
+                                    .stroke(Stroke::new(1.0_f32, p.outline_variant))
+                                    .show(ui, |ui| {
+                                        ui.vertical(|ui| {
+                                            ui.set_min_width(inner_w);
+                                            ui.set_max_width(inner_w);
+
+                                            ui.horizontal(|ui| {
                                                 ui.label(
-                                                    RichText::new("⚠ Warning")
-                                                        .small()
-                                                        .strong()
-                                                        .color(p.error),
+                                                    RichText::new("📋 Receipt & Manifest Inspector")
+                                                        .strong(),
                                                 );
-                                            }
-                                        }
-                                    });
-                                    ui.separator();
-                                    egui::ScrollArea::vertical()
-                                        .id_salt("receipt_inspector_scroll")
-                                        .max_height(260.0)
-                                        .auto_shrink([false, false])
-                                        .show(ui, |ui| {
-                                            let scroll_w = (inner_w - 6.0).max(120.0);
-                                            ui.set_max_width(scroll_w);
-                                            if let Some(ref f) = current_folder {
-                                                if !f.receipt_raw.trim().is_empty() {
-                                                    ui.add(
-                                                        egui::Label::new(
-                                                            RichText::new(&f.receipt_raw)
-                                                                .monospace()
-                                                                .small()
-                                                                .color(p.on_surface),
-                                                        )
-                                                        .wrap(),
-                                                    );
-                                                } else {
-                                                    ui.add(
-                                                        egui::Label::new(
-                                                            RichText::new(
-                                                                "No receipt.json found in this transfer folder (Config ID: DEFAULT/No_ID).\n\nTip: You can automate transfers without receipts by saving a Wildcard Pattern rule!",
-                                                            )
-                                                            .small()
-                                                            .color(p.on_surface_variant),
-                                                        )
-                                                        .wrap(),
+                                                if let Some(ref f) = current_folder {
+                                                    ui.with_layout(
+                                                        egui::Layout::right_to_left(
+                                                            egui::Align::Center,
+                                                        ),
+                                                        |ui| {
+                                                            if f.receipt_warning.is_some() {
+                                                                ui.label(
+                                                                    RichText::new("⚠ Warning")
+                                                                        .small()
+                                                                        .strong()
+                                                                        .color(p.error),
+                                                                );
+                                                            } else if !f
+                                                                .receipt_raw
+                                                                .trim()
+                                                                .is_empty()
+                                                            {
+                                                                ui.label(
+                                                                    RichText::new("✔ Loaded")
+                                                                        .small()
+                                                                        .color(p.success),
+                                                                );
+                                                            }
+                                                        },
                                                     );
                                                 }
-                                            } else {
-                                                ui.add(
-                                                    egui::Label::new(
-                                                        RichText::new("No folder selected.")
-                                                            .color(p.on_surface_variant),
-                                                    )
-                                                    .wrap(),
-                                                );
-                                            }
+                                            });
+                                            ui.separator();
+
+                                            let code_box_w = (inner_w - 16.0).max(110.0);
+                                            egui::Frame::none()
+                                                .fill(p.surface_container_low)
+                                                .rounding(Rounding::same(8.0))
+                                                .inner_margin(Margin::same(8.0))
+                                                .show(ui, |ui| {
+                                                    ui.allocate_ui_with_layout(
+                                                        Vec2::new(code_box_w, scroll_h),
+                                                        egui::Layout::top_down(egui::Align::Min),
+                                                        |ui| {
+                                                            ui.set_clip_rect(ui.max_rect());
+                                                            egui::ScrollArea::both()
+                                                                .id_salt("receipt_inspector_scroll")
+                                                                .min_scrolled_height(scroll_h)
+                                                                .max_height(scroll_h)
+                                                                .max_width(code_box_w)
+                                                                .auto_shrink([false, false])
+                                                                .show(ui, |ui| {
+                                                                    ui.vertical(|ui| {
+                                                                        let scroll_w = (code_box_w
+                                                                            - 8.0)
+                                                                            .max(100.0);
+                                                                        ui.set_min_width(scroll_w);
+                                                                        ui.spacing_mut()
+                                                                            .item_spacing
+                                                                            .y = 2.0;
+
+                                                                        if let Some(ref f) =
+                                                                            current_folder
+                                                                        {
+                                                                            if !f
+                                                                                .receipt_raw
+                                                                                .trim()
+                                                                                .is_empty()
+                                                                            {
+                                                                                let formatted = if f
+                                                                                    .receipt_raw
+                                                                                    .trim()
+                                                                                    .contains('\n')
+                                                                                {
+                                                                                    f.receipt_raw
+                                                                                        .clone()
+                                                                                } else {
+                                                                                    serde_json::from_str::<serde_json::Value>(&f.receipt_raw)
+                                                                                        .ok()
+                                                                                        .and_then(|v| serde_json::to_string_pretty(&v).ok())
+                                                                                        .unwrap_or_else(|| f.receipt_raw.clone())
+                                                                                };
+
+                                                                                let mono_font =
+                                                                                    egui::FontId::monospace(
+                                                                                        mono_size,
+                                                                                    );
+                                                                                for line in
+                                                                                    formatted
+                                                                                        .lines()
+                                                                                {
+                                                                                    let mut job = egui::text::LayoutJob::default();
+                                                                                    job.wrap.max_width = f32::INFINITY;
+                                                                                    append_json_highlighted_line(
+                                                                                        &mut job,
+                                                                                        line,
+                                                                                        &mono_font,
+                                                                                        &p,
+                                                                                    );
+                                                                                    ui.add(
+                                                                                        egui::Label::new(
+                                                                                            job,
+                                                                                        )
+                                                                                        .extend(),
+                                                                                    );
+                                                                                }
+                                                                            } else {
+                                                                                ui.set_max_width(
+                                                                                    scroll_w,
+                                                                                );
+                                                                                ui.add(
+                                                                                    egui::Label::new(
+                                                                                        RichText::new(
+                                                                                            "No receipt.json or manifest.json found in this transfer folder (Config ID: DEFAULT/No_ID).\n\nTip: Save a Wildcard Pattern rule, or click 'Create Manifest' and include manifest.json when uploading in the User Portal!",
+                                                                                        )
+                                                                                        .small()
+                                                                                        .color(p.on_surface_variant),
+                                                                                    )
+                                                                                    .wrap(),
+                                                                                );
+                                                                            }
+                                                                        } else {
+                                                                            ui.set_max_width(
+                                                                                scroll_w,
+                                                                            );
+                                                                            ui.add(
+                                                                                egui::Label::new(
+                                                                                    RichText::new(
+                                                                                        "No folder selected.",
+                                                                                    )
+                                                                                    .color(
+                                                                                        p.on_surface_variant,
+                                                                                    ),
+                                                                                )
+                                                                                .wrap(),
+                                                                            );
+                                                                        }
+                                                                    });
+                                                                });
+                                                        },
+                                                    );
+                                                });
                                         });
-                                });
-                        };
+                                    });
+                            };
 
                         let col_gap = 12.0;
                         if panel_width >= 580.0 {
-                            let col_inner_w = ((panel_width - col_gap) * 0.5 - 26.0).max(160.0);
+                            let col_outer_w = ((panel_width - col_gap) * 0.5).max(186.0);
+                            let col_inner_w = (col_outer_w - 26.0).max(160.0);
                             ui.horizontal_top(|ui| {
                                 ui.spacing_mut().item_spacing.x = col_gap;
-                                render_files_card(ui, col_inner_w);
-                                render_receipt_card(ui, col_inner_w);
+                                ui.allocate_ui_with_layout(
+                                    Vec2::new(col_outer_w, 0.0),
+                                    egui::Layout::top_down(egui::Align::Min),
+                                    |ui| {
+                                        render_files_card(ui, col_inner_w, inspector_scroll_h);
+                                    },
+                                );
+                                ui.allocate_ui_with_layout(
+                                    Vec2::new(col_outer_w, 0.0),
+                                    egui::Layout::top_down(egui::Align::Min),
+                                    |ui| {
+                                        render_receipt_card(ui, col_inner_w, inspector_scroll_h);
+                                    },
+                                );
                             });
                         } else {
                             let full_insp_inner_w = (panel_width - 26.0).max(200.0);
-                            render_files_card(ui, full_insp_inner_w);
+                            render_files_card(ui, full_insp_inner_w, 200.0);
                             ui.add_space(10.0);
-                            render_receipt_card(ui, full_insp_inner_w);
+                            render_receipt_card(ui, full_insp_inner_w, 200.0);
                         }
                     });
             });
@@ -2008,6 +2221,69 @@ impl UiLabelHelper for egui::Ui {
             },
         );
     }
+}
+
+/// Appends a syntax-highlighted JSON line into an `egui::text::LayoutJob` using true monospace font.
+fn append_json_highlighted_line(
+    job: &mut egui::text::LayoutJob,
+    line: &str,
+    font: &egui::FontId,
+    p: &M3Palette,
+) {
+    let fmt = |color| egui::TextFormat {
+        font_id: font.clone(),
+        color,
+        ..Default::default()
+    };
+
+    // Split leading whitespace so indentation stays exact
+    let indent_len = line.len() - line.trim_start().len();
+    if indent_len > 0 {
+        job.append(&line[..indent_len], 0.0, fmt(p.on_surface_variant));
+    }
+    let rest = &line[indent_len..];
+
+    // Section banner headers (when both manifest.json and receipt.json are displayed)
+    if rest.starts_with("//") {
+        job.append(rest, 0.0, fmt(p.warning));
+        return;
+    }
+
+    // Check for `"key": value` pattern
+    if let Some(after_open) = rest.strip_prefix('"') {
+        if let Some(close_idx) = after_open.find("\":") {
+            let key_span = &rest[..close_idx + 2]; // includes opening and closing `"`
+            let remainder = &rest[close_idx + 2..]; // starts at `:`
+            job.append(key_span, 0.0, fmt(p.primary));
+            if let Some(after_colon) = remainder.strip_prefix(':') {
+                job.append(":", 0.0, fmt(p.on_surface_variant));
+                let val_trimmed = after_colon.trim_end_matches(',');
+                let has_comma = after_colon.ends_with(',');
+                let val_color = if val_trimmed.trim().starts_with('"') {
+                    p.on_surface
+                } else {
+                    p.success
+                };
+                job.append(val_trimmed, 0.0, fmt(val_color));
+                if has_comma {
+                    job.append(",", 0.0, fmt(p.on_surface_variant));
+                }
+                return;
+            }
+        }
+    }
+
+    // Brackets / braces vs standalone array values
+    let trimmed = rest.trim();
+    let color = if matches!(
+        trimmed,
+        "{" | "}" | "}," | "[" | "]" | "]," | "{}" | "[]"
+    ) {
+        p.on_surface_variant
+    } else {
+        p.on_surface
+    };
+    job.append(rest, 0.0, fmt(color));
 }
 
 impl InboxMoverGuiApp {
@@ -2553,16 +2829,30 @@ impl InboxMoverGuiApp {
                 });
         }
 
-        // 6. Create Receipt Modal
+        // 6. Create Manifest Modal
         if self.show_create_receipt_modal {
-            egui::Window::new("📋 Create Custom receipt.json")
+            egui::Window::new("📋 Create Upload Manifest (manifest.json)")
                 .collapsible(false)
                 .resizable(false)
                 .anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO)
-                .fixed_size(Vec2::new(500.0, 280.0))
+                .fixed_size(Vec2::new(540.0, 355.0))
                 .show(ctx, |ui| {
+                    egui::Frame::none()
+                        .fill(p.surface_container_high)
+                        .rounding(Rounding::same(8.0))
+                        .inner_margin(Margin::same(10.0))
+                        .show(ui, |ui| {
+                            ui.label(
+                                RichText::new(
+                                    "💡 User Portal Tip: Add this manifest.json file along with your files when uploading in the User Portal. When the transfer arrives, Inbox Mover automatically reads manifest.json (alongside the portal's receipt.json) and uses these destination & processing settings.",
+                                )
+                                .small()
+                                .color(p.on_surface_variant),
+                            );
+                        });
+                    ui.add_space(6.0);
                     ui.horizontal(|ui| {
-                        ui.label("Permit / Config ID:");
+                        ui.label("Permit / Config ID (optional):");
                         ui.text_edit_singleline(&mut self.receipt_permit_id);
                     });
                     ui.horizontal(|ui| {
@@ -2581,26 +2871,40 @@ impl InboxMoverGuiApp {
                     ui.separator();
                     ui.horizontal(|ui| {
                         ui.label("Save to File:");
-                        ui.text_edit_singleline(&mut self.receipt_save_path);
+                        ui.add(
+                            egui::TextEdit::singleline(&mut self.receipt_save_path)
+                                .desired_width(340.0),
+                        );
+                        if ui.button("Browse...").clicked() {
+                            if let Some(chosen) = rfd::FileDialog::new()
+                                .set_file_name("manifest.json")
+                                .add_filter("JSON Manifest", &["json"])
+                                .save_file()
+                            {
+                                self.receipt_save_path = chosen.to_string_lossy().to_string();
+                            }
+                        }
                     });
                     ui.add_space(8.0);
                     ui.horizontal(|ui| {
-                        if ui.button("💾 Generate receipt.json").clicked() {
+                        if ui.button("💾 Generate manifest.json").clicked() {
                             let path = PathBuf::from(self.receipt_save_path.trim());
                             let pid = if self.receipt_permit_id.trim().is_empty() {
                                 None
                             } else {
                                 Some(self.receipt_permit_id.trim())
                             };
-                            match self.core.create_receipt_file(&path, &self.receipt_rule, pid) {
+                            match self.core.create_manifest_file(&path, &self.receipt_rule, pid) {
                                 Ok(()) => {
                                     self.show_create_receipt_modal = false;
                                     self.refresh_folders();
-                                    self.status_message = format!("Created receipt at {:?}", path);
+                                    self.status_message =
+                                        format!("Created manifest at {:?}", path);
                                     self.status_is_error = false;
                                 }
                                 Err(e) => {
-                                    self.status_message = format!("Failed creating receipt: {e}");
+                                    self.status_message =
+                                        format!("Failed creating manifest: {e}");
                                     self.status_is_error = true;
                                 }
                             }
@@ -2641,13 +2945,13 @@ impl InboxMoverGuiApp {
 
                     match self.log_tab {
                         LogTab::LocalFolder => {
+                            let log_mono_size = (self.core.app_settings.font_size as f32).clamp(10.0, 22.0);
                             egui::ScrollArea::vertical()
                                 .id_salt("local_log_scroll")
                                 .show(ui, |ui| {
                                     ui.label(
                                         RichText::new(&self.local_log_content)
-                                            .monospace()
-                                            .small(),
+                                            .font(egui::FontId::monospace(log_mono_size)),
                                     );
                                 });
                         }

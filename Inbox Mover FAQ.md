@@ -40,9 +40,9 @@ Inbox Mover remembers your preferences so you only have to "teach" it once. It u
 * **Scenario B**: By **Pattern Matching** of Filenames: If there is no ID, you can use the Pattern Match field. Enter a wildcard like **survey_*.dwg**. Next time a folder arrives containing a file that matches that pattern, Inbox Mover will recognize it and apply your routing rules automatically.
 
 
-### **5\. Did you know you can add a receipt.json to your upload?**
+### **5\. Did you know you can add a `manifest.json` to your User Portal upload?**
 
-In Inbox Mover you can create a receipt.json that can be added to the files upload. Download it locally and add it to the files that are uploaded. A nice feature especially when dealing with multiple workspaces, the receipt.json rules them all; destinations, post-processing, and what to do with zips!
+In Inbox Mover you can click **Create Manifest** to generate a `manifest.json` file with your destination folders and processing options. Download or save it locally and include it along with the files you upload in the **User Portal**. When the transfer arrives in your workspace Inbox, Inbox Mover automatically reads `manifest.json` (alongside the portal's `receipt.json`) and applies your destinations, post-processing, and ZIP extraction settings!
 
 ### **6\. Most of my data arrives in ZIP files. Do I still have to right-click and "Extract All" manually?**
 
@@ -73,11 +73,11 @@ Just in case, InBox Mover also allows you to manually delete folders.
 
 ### **9\. Can I control where my files go *before* I even upload them?**
 
-**Yes\! You can dictate exactly what Inbox Mover does by including your own receipt.json file in your upload.**
+**Yes\! You can dictate exactly what Inbox Mover does by clicking `Create Manifest` and including `manifest.json` with your upload in the User Portal.**
 
-If you create a simple text file named receipt.json and place it alongside your data (either inside your ZIP file or just sitting loose in the folder), Inbox Mover will automatically read it and force the tool to follow your rules.
+If you generate a `manifest.json` file (or write one yourself) and include it alongside your data when uploading in the **User Portal** (either packaged inside the upload ZIP or sitting loose in the `transfer-*` folder), Inbox Mover will automatically read it alongside the portal's `receipt.json` and follow your routing rules.
 
-Here is an example of what you can type inside your custom receipt.json file, grouped logically from file extraction to final cleanup:
+Here is an example of what `manifest.json` looks like, grouped logically from file extraction to final cleanup:
 
 {  
     "permitId": "MY-PROJECT-123",  
