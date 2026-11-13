@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Inbox Mover
+Comment=Unpack, route, and audit incoming transfer-* folders
+Exec=inbox-mover-rust-gui
+Icon=inbox_mover
+Terminal=false
+Categories=Utility;FileTools;Archiving;
+StartupWMClass=inbox-mover-rust-gui

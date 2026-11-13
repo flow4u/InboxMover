@@ -8,6 +8,6 @@
   "global_dir": "",
   "overrule_receipt": false,
   "simple_mode": true,
-  "show_welcome_splash": true,
+  "show_welcome_splash": false,
   "show_guidance": true
 }

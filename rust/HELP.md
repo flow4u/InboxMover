@@ -212,6 +212,7 @@ The GUI and TUI share the same mental model and shortcut structure so you can sw
 | **Toggle Overrule Receipt** | Sidebar Checkbox | `v` |
 | **Edit Search 1 / Search 2 Path** | Click Input / `Browse` | `/` (Search 1), `2` (Search 2) |
 | **Edit Target / Processed / Receipt**| Click Input / `Browse` | `t` (Target), `z` (Processed), `f` (Receipt) |
+| **Open Target / Processed / Receipt**| `Open` Button (next to `Browse`) | `T` (Target), `Z` (Processed), `F` (Receipt) |
 | **Toggle Auto-Extract ZIPs** | Checkbox | `e` |
 | **Cycle Conflict / Post-Action** | Dropdown | `x` (Conflict), `u` (Post-Action) |
 | **Create Upload `manifest.json`** | `Create Manifest` Button | `c` |

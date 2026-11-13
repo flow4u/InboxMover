@@ -7,7 +7,9 @@ use std::time::Duration;
 use crossterm::{
     event::{self, Event, KeyCode, KeyEventKind, KeyModifiers},
     execute,
-    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+    terminal::{
+        disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen, SetTitle,
+    },
 };
 use ratatui::{
     backend::CrosstermBackend,
@@ -195,6 +197,32 @@ impl TuiApp {
                 self.is_rule_modified = !self.active_rule.same_settings(&saved_rule);
             } else {
                 self.is_rule_modified = true;
+            }
+        }
+    }
+
+    fn open_configured_dir(&mut self, label: &str, raw_path: &str) {
+        let trimmed = raw_path.trim();
+        if trimmed.is_empty() {
+            self.status_message = format!("{label} path is empty.");
+            self.status_is_error = true;
+            return;
+        }
+        let resolved = crate::path_translator::PathTranslator::translate(trimmed);
+        let p = std::path::Path::new(&resolved);
+        if !p.is_dir() {
+            self.status_message = format!("{label} does not exist on disk yet: {resolved}");
+            self.status_is_error = true;
+            return;
+        }
+        match open::that(p) {
+            Ok(()) => {
+                self.status_message = format!("Opened {label}: {resolved}");
+                self.status_is_error = false;
+            }
+            Err(e) => {
+                self.status_message = format!("Failed to open {label}: {e}");
+                self.status_is_error = true;
             }
         }
     }
@@ -778,6 +806,21 @@ impl TuiApp {
                     let _ = open::that(&f.folder_path);
                 }
             }
+            KeyCode::Char('T') => {
+                self.open_configured_dir("Target Folder", &self.active_rule.target_folder.clone());
+            }
+            KeyCode::Char('Z') => {
+                self.open_configured_dir(
+                    "Processed Folder",
+                    &self.active_rule.target_zip_folder.clone(),
+                );
+            }
+            KeyCode::Char('F') => {
+                self.open_configured_dir(
+                    "Receipt Folder",
+                    &self.active_rule.receipt_folder.clone(),
+                );
+            }
             KeyCode::Delete | KeyCode::Char('d') => {
                 if !self.selected_indices.is_empty() {
                     self.modal = TuiModal::DeleteConfirm;
@@ -1056,7 +1099,7 @@ impl TuiApp {
         let dest_lines = vec![
             Line::from(vec![
                 Span::styled(
-                    " [t] Target Folder *:    ",
+                    " [t/T] Target Folder *:  ",
                     Style::default().fg(M3_PRIMARY).add_modifier(Modifier::BOLD),
                 ),
                 Span::styled(
@@ -1073,7 +1116,7 @@ impl TuiApp {
                 ),
             ]),
             Line::from(vec![
-                Span::styled(" [z] Processed Folder:   ", Style::default().fg(M3_PRIMARY)),
+                Span::styled(" [z/Z] Processed Folder: ", Style::default().fg(M3_PRIMARY)),
                 Span::raw(if self.active_rule.target_zip_folder.is_empty() {
                     "<not set>"
                 } else {
@@ -1081,7 +1124,7 @@ impl TuiApp {
                 }),
             ]),
             Line::from(vec![
-                Span::styled(" [f] Receipt Folder:     ", Style::default().fg(M3_PRIMARY)),
+                Span::styled(" [f/F] Receipt Folder:   ", Style::default().fg(M3_PRIMARY)),
                 Span::raw(if self.active_rule.receipt_folder.is_empty() {
                     "<defaults to Target Folder>"
                 } else {
@@ -1596,8 +1639,12 @@ fn centered_rect(percent_x: u16, percent_y: u16, r: Rect) -> Rect {
 pub fn run_tui(core: InboxMoverCore) -> Result<(), String> {
     enable_raw_mode().map_err(|e| format!("Failed to enable terminal raw mode: {e}"))?;
     let mut stdout = io::stdout();
-    execute!(stdout, EnterAlternateScreen)
-        .map_err(|e| format!("Failed to enter alternate screen: {e}"))?;
+    execute!(
+        stdout,
+        EnterAlternateScreen,
+        SetTitle(format!("Inbox Mover v{} (TUI)", env!("CARGO_PKG_VERSION")))
+    )
+    .map_err(|e| format!("Failed to enter alternate screen: {e}"))?;
     let backend = CrosstermBackend::new(stdout);
     let mut terminal =
         Terminal::new(backend).map_err(|e| format!("Failed to initialize terminal: {e}"))?;

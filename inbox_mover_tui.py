@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Inbox Mover TUI v0.21.0
+Inbox Mover TUI v0.21.2
 A TUI conversion of the Inbox Mover utility.
 Runs on standard Python libraries (uses curses for the interface).
 
@@ -23,7 +23,7 @@ import fnmatch
 import curses
 import textwrap
 
-VERSION = "0.21.0 (TUI)"
+VERSION = "0.21.2 (TUI)"
 
 # --------------------------------------------------------------------------- #
 # CORE LOGIC (Preserved from original)
@@ -606,6 +606,15 @@ def main():
     if args.cli:
         print("CLI Mode currently requires arguments. See help.")
     else:
+        try:
+            if sys.platform == "win32":
+                import ctypes
+                ctypes.windll.kernel32.SetConsoleTitleW(f"Inbox Mover v{VERSION}")
+            else:
+                sys.stdout.write(f"\x1b]0;Inbox Mover v{VERSION}\x07")
+                sys.stdout.flush()
+        except Exception:
+            pass
         curses.wrapper(lambda stdscr: InboxMoverTUI(stdscr).run())
 
 if __name__ == "__main__":

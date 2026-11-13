@@ -555,6 +555,7 @@ impl ApplicationHandler<()> for SwWinitHandler {
                 "Inbox Mover v{} — Transfer Folder Processor",
                 env!("CARGO_PKG_VERSION")
             ))
+            .with_window_icon(crate::icon::winit_window_icon())
             .with_inner_size(LogicalSize::new(1240.0, 800.0))
             .with_min_inner_size(LogicalSize::new(920.0, 620.0));
 

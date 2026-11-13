@@ -169,6 +169,8 @@ pub struct InboxMoverGuiApp {
     show_password_modal: bool,
     password_zip_name: String,
     password_input: String,
+
+    app_icon_tex: Option<egui::TextureHandle>,
 }
 
 impl InboxMoverGuiApp {
@@ -221,6 +223,7 @@ impl InboxMoverGuiApp {
             show_password_modal: false,
             password_zip_name: String::new(),
             password_input: String::new(),
+            app_icon_tex: None,
         };
 
         app.apply_theme(ctx);
@@ -233,6 +236,32 @@ impl InboxMoverGuiApp {
             M3Palette::dark()
         } else {
             M3Palette::light()
+        }
+    }
+
+    fn open_configured_folder(&mut self, label: &str, raw_path: &str) {
+        let trimmed = raw_path.trim();
+        if trimmed.is_empty() {
+            self.status_message = format!("{label} path is empty.");
+            self.status_is_error = true;
+            return;
+        }
+        let resolved = crate::path_translator::PathTranslator::translate(trimmed);
+        let p = std::path::Path::new(&resolved);
+        if !p.is_dir() {
+            self.status_message = format!("{label} does not exist on disk yet: {resolved}");
+            self.status_is_error = true;
+            return;
+        }
+        match open::that(p) {
+            Ok(()) => {
+                self.status_message = format!("Opened {label}: {resolved}");
+                self.status_is_error = false;
+            }
+            Err(e) => {
+                self.status_message = format!("Failed to open {label} ({resolved}): {e}");
+                self.status_is_error = true;
+            }
         }
     }
 
@@ -573,6 +602,17 @@ impl InboxMoverGuiApp {
         let p = self.palette();
         let is_advanced = !self.core.app_settings.simple_mode;
 
+        let app_icon_id = self
+            .app_icon_tex
+            .get_or_insert_with(|| {
+                ctx.load_texture(
+                    "inbox_mover_app_icon",
+                    crate::icon::egui_color_image(),
+                    egui::TextureOptions::LINEAR,
+                )
+            })
+            .id();
+
         // ====================================================================
         // TOP HEADER BAR (Material 3 Top App Bar)
         // ====================================================================
@@ -585,13 +625,22 @@ impl InboxMoverGuiApp {
             )
             .show(ctx, |ui| {
                 ui.horizontal(|ui| {
+                    let (icon_rect, _) =
+                        ui.allocate_exact_size(Vec2::splat(24.0), Sense::hover());
+                    ui.painter().image(
+                        app_icon_id,
+                        icon_rect,
+                        egui::Rect::from_min_max(egui::pos2(0.0, 0.0), egui::pos2(1.0, 1.0)),
+                        Color32::WHITE,
+                    );
+
                     egui::Frame::none()
                         .fill(p.primary_container)
                         .rounding(Rounding::same(8.0))
                         .inner_margin(Margin::symmetric(10.0, 4.0))
                         .show(ui, |ui| {
                             ui.label(
-                                RichText::new("📦 INBOX MOVER")
+                                RichText::new("INBOX MOVER")
                                     .strong()
                                     .color(p.on_primary_container),
                             );
@@ -1360,7 +1409,8 @@ impl InboxMoverGuiApp {
                                 });
                                 ui.add_space(6.0);
 
-                                // Target Folder Row (Browse anchored right so it never clips)
+                                // Target Folder Row (Browse + Open anchored right so they never clip)
+                                let mut open_folder_req: Option<(&'static str, String)> = None;
                                 ui.horizontal(|ui| {
                                     ui.sized_label(
                                         label_col_w,
@@ -1371,7 +1421,31 @@ impl InboxMoverGuiApp {
                                     ui.with_layout(
                                         egui::Layout::right_to_left(egui::Align::Center),
                                         |ui| {
-                                            if ui.button("Browse").clicked() {
+                                            let has_target =
+                                                !self.active_rule.target_folder.trim().is_empty();
+                                            if ui
+                                                .add_enabled(
+                                                    has_target,
+                                                    egui::Button::new("📂 Open"),
+                                                )
+                                                .on_hover_text(
+                                                    "Open Target Folder in your file manager",
+                                                )
+                                                .on_disabled_hover_text(
+                                                    "Set a Target Folder path first",
+                                                )
+                                                .clicked()
+                                            {
+                                                open_folder_req = Some((
+                                                    "Target Folder",
+                                                    self.active_rule.target_folder.clone(),
+                                                ));
+                                            }
+                                            if ui
+                                                .button("Browse")
+                                                .on_hover_text("Select Target Folder")
+                                                .clicked()
+                                            {
                                                 if let Some(dir) =
                                                     rfd::FileDialog::new().pick_folder()
                                                 {
@@ -1416,7 +1490,34 @@ impl InboxMoverGuiApp {
                                     ui.with_layout(
                                         egui::Layout::right_to_left(egui::Align::Center),
                                         |ui| {
-                                            if ui.button("Browse").clicked() {
+                                            let has_proc = !self
+                                                .active_rule
+                                                .target_zip_folder
+                                                .trim()
+                                                .is_empty();
+                                            if ui
+                                                .add_enabled(
+                                                    has_proc,
+                                                    egui::Button::new("📂 Open"),
+                                                )
+                                                .on_hover_text(
+                                                    "Open Processed Folder in your file manager",
+                                                )
+                                                .on_disabled_hover_text(
+                                                    "Set a Processed Folder path first",
+                                                )
+                                                .clicked()
+                                            {
+                                                open_folder_req = Some((
+                                                    "Processed Folder",
+                                                    self.active_rule.target_zip_folder.clone(),
+                                                ));
+                                            }
+                                            if ui
+                                                .button("Browse")
+                                                .on_hover_text("Select Processed Folder")
+                                                .clicked()
+                                            {
                                                 if let Some(dir) =
                                                     rfd::FileDialog::new().pick_folder()
                                                 {
@@ -1444,45 +1545,71 @@ impl InboxMoverGuiApp {
                                     );
                                 });
 
-                                // Receipt Folder Row (Shown in Advanced Mode or if non-empty)
-                                if is_advanced || !self.active_rule.receipt_folder.is_empty() {
-                                    ui.horizontal(|ui| {
-                                        ui.sized_label(
-                                            label_col_w,
-                                            "Receipt Folder:",
-                                            "Optional: Separate folder to store timestamped receipt*.json files. Leave blank to place inside Target Folder.",
-                                            &p,
-                                        );
-                                        ui.with_layout(
-                                            egui::Layout::right_to_left(egui::Align::Center),
-                                            |ui| {
-                                                if ui.button("Browse").clicked() {
-                                                    if let Some(dir) =
-                                                        rfd::FileDialog::new().pick_folder()
-                                                    {
-                                                        self.active_rule.receipt_folder =
-                                                            dir.to_string_lossy().to_string();
-                                                        self.check_rule_modified();
-                                                    }
-                                                }
-                                                let edit_w = ui.available_width().max(80.0);
-                                                if ui
-                                                    .add_sized(
-                                                        [edit_w, 24.0],
-                                                        egui::TextEdit::singleline(
-                                                            &mut self.active_rule.receipt_folder,
-                                                        )
-                                                        .hint_text(
-                                                            "Optional: Separate folder for receipt.json files...",
-                                                        ),
-                                                    )
-                                                    .changed()
+                                // Receipt Folder Row
+                                ui.horizontal(|ui| {
+                                    ui.sized_label(
+                                        label_col_w,
+                                        "Receipt Folder:",
+                                        "Optional: Separate folder to store timestamped receipt*.json and manifest*.json files. Leave blank to place inside Target Folder.",
+                                        &p,
+                                    );
+                                    ui.with_layout(
+                                        egui::Layout::right_to_left(egui::Align::Center),
+                                        |ui| {
+                                            let has_rec =
+                                                !self.active_rule.receipt_folder.trim().is_empty();
+                                            if ui
+                                                .add_enabled(
+                                                    has_rec,
+                                                    egui::Button::new("📂 Open"),
+                                                )
+                                                .on_hover_text(
+                                                    "Open Receipt Folder in your file manager",
+                                                )
+                                                .on_disabled_hover_text(
+                                                    "Set a Receipt Folder path first",
+                                                )
+                                                .clicked()
+                                            {
+                                                open_folder_req = Some((
+                                                    "Receipt Folder",
+                                                    self.active_rule.receipt_folder.clone(),
+                                                ));
+                                            }
+                                            if ui
+                                                .button("Browse")
+                                                .on_hover_text("Select Receipt Folder")
+                                                .clicked()
+                                            {
+                                                if let Some(dir) =
+                                                    rfd::FileDialog::new().pick_folder()
                                                 {
+                                                    self.active_rule.receipt_folder =
+                                                        dir.to_string_lossy().to_string();
                                                     self.check_rule_modified();
                                                 }
-                                            },
-                                        );
-                                    });
+                                            }
+                                            let edit_w = ui.available_width().max(80.0);
+                                            if ui
+                                                .add_sized(
+                                                    [edit_w, 24.0],
+                                                    egui::TextEdit::singleline(
+                                                        &mut self.active_rule.receipt_folder,
+                                                    )
+                                                    .hint_text(
+                                                        "Optional: Separate folder for receipt.json / manifest.json files...",
+                                                    ),
+                                                )
+                                                .changed()
+                                            {
+                                                self.check_rule_modified();
+                                            }
+                                        },
+                                    );
+                                });
+
+                                if let Some((lbl, path_to_open)) = open_folder_req {
+                                    self.open_configured_folder(lbl, &path_to_open);
                                 }
 
                                 ui.add_space(8.0);
@@ -2290,18 +2417,42 @@ impl InboxMoverGuiApp {
     fn render_modals(&mut self, ctx: &egui::Context, p: &M3Palette) {
         // 1. First-Time Welcome & Experience Selector Modal
         if self.show_welcome_modal {
+            let welcome_icon_id = self
+                .app_icon_tex
+                .get_or_insert_with(|| {
+                    ctx.load_texture(
+                        "inbox_mover_app_icon",
+                        crate::icon::egui_color_image(),
+                        egui::TextureOptions::LINEAR,
+                    )
+                })
+                .id();
             egui::Window::new("👋 Welcome to Inbox Mover")
                 .collapsible(false)
                 .resizable(false)
                 .anchor(egui::Align2::CENTER_CENTER, Vec2::ZERO)
-                .fixed_size(Vec2::new(560.0, 380.0))
+                .fixed_size(Vec2::new(560.0, 385.0))
                 .show(ctx, |ui| {
-                    ui.label(
-                        RichText::new("Modern Transfer Folder Unpacker & Rule Engine")
-                            .strong()
-                            .size(16.0)
-                            .color(p.primary),
-                    );
+                    ui.horizontal(|ui| {
+                        let (icon_rect, _) =
+                            ui.allocate_exact_size(Vec2::splat(36.0), Sense::hover());
+                        ui.painter().image(
+                            welcome_icon_id,
+                            icon_rect,
+                            egui::Rect::from_min_max(
+                                egui::pos2(0.0, 0.0),
+                                egui::pos2(1.0, 1.0),
+                            ),
+                            Color32::WHITE,
+                        );
+                        ui.add_space(4.0);
+                        ui.label(
+                            RichText::new("Modern Transfer Folder Unpacker & Rule Engine")
+                                .strong()
+                                .size(16.0)
+                                .color(p.primary),
+                        );
+                    });
                     ui.add_space(6.0);
                     ui.label(
                         "Inbox Mover automatically extracts ZIP archives, routes files and receipts to project directories, translates Windows/Linux network paths, and maintains a 3-tier audit log.",
@@ -3137,6 +3288,8 @@ pub fn run_gui(core: InboxMoverCore) -> Result<(), String> {
                 "Inbox Mover v{} — Transfer Folder Processor",
                 env!("CARGO_PKG_VERSION")
             ))
+            .with_icon(crate::icon::eframe_icon_data())
+            .with_app_id("inbox-mover")
             .with_inner_size([1240.0, 800.0])
             .with_min_inner_size([920.0, 620.0]),
         renderer,

@@ -1,4 +1,4 @@
-# **Inbox Mover (v0.21.0)**
+# <img src="./assets/inbox_mover.svg" alt="Inbox Mover Icon" width="40" align="top" /> **Inbox Mover (v0.21.2)**
 
 **Inbox Mover** is a cross-platform utility designed to process files in the **transfer-** folders found in **i:** and **z:\\inbox** on [**myDRE**](https://mydre.org)**.** 
 
@@ -64,7 +64,7 @@ You can run Inbox Mover either as **standalone compiled executables** (no Python
 2. Move the inbox\_mover.py file to C:\\helper\\ *(You may need to create the "helper" folder on your C: drive if it doesn't exist yet)*.  
 3. Right-click on inbox\_mover.py and select **"Create shortcut"**.  
 4. Right-click the newly created shortcut and select **"Properties"**.  
-5. In the Properties window, locate the **"Run"** dropdown menu, change it to **"Minimized"**, and click **OK**. *(This ensures the background command prompt stays out of your way when launching the app).*  
+5. In the Properties window, locate the **"Run"** dropdown menu, change it to **"Minimized"**, optionally click **"Change Icon..."** to pick [`assets/inbox_mover.ico`](./assets/inbox_mover.ico), and click **OK**. *(Note: the standalone Rust `.exe` files already have the Inbox Mover icon embedded directly inside the executable, and `inbox_mover.py` also embeds the window/taskbar icon internally).*  
 6. Finally, move this customized shortcut to C:\\Users\\Public\\Desktop\\. This makes the application easily accessible on the desktop for every user account on the computer\!
 
 

@@ -1,0 +1,53 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 256 256" width="256" height="256">
+  <defs>
+    <linearGradient id="bgGrad" x1="0%" y1="0%" x2="85%" y2="100%">
+      <stop offset="0%" stop-color="#163266"/>
+      <stop offset="52%" stop-color="#1D56C9"/>
+      <stop offset="100%" stop-color="#0E8AD8"/>
+    </linearGradient>
+    <linearGradient id="folderGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFE052"/>
+      <stop offset="100%" stop-color="#F59E0B"/>
+    </linearGradient>
+    <linearGradient id="trayGrad" x1="0%" y1="0%" x2="0%" y2="100%">
+      <stop offset="0%" stop-color="#FFFFFF"/>
+      <stop offset="100%" stop-color="#DBE7F7"/>
+    </linearGradient>
+    <linearGradient id="pillGrad" x1="0%" y1="0%" x2="100%" y2="0%">
+      <stop offset="0%" stop-color="#10B981"/>
+      <stop offset="100%" stop-color="#059669"/>
+    </linearGradient>
+    <filter id="softShadow" x="-15%" y="-15%" width="130%" height="135%">
+      <feDropShadow dx="0" dy="6" stdDeviation="6" flood-color="#050D21" flood-opacity="0.34"/>
+    </filter>
+  </defs>
+
+  <!-- App Tile Squircle -->
+  <rect x="12" y="12" width="232" height="232" rx="54" ry="54" fill="url(#bgGrad)"/>
+  <rect x="13.5" y="13.5" width="229" height="229" rx="52.5" ry="52.5" fill="none" stroke="#FFFFFF" stroke-opacity="0.22" stroke-width="2"/>
+
+  <!-- Golden Transfer Folder / Archive Package -->
+  <g filter="url(#softShadow)">
+    <path d="M62 66 C62 56 69 50 79 50 L103 50 C111 50 116 54 120 62 L123 66 L181 66 C189 66 194 72 194 80 L194 149 C194 157 188 162 180 162 L76 162 C68 162 62 157 62 149 Z" fill="url(#folderGrad)"/>
+    <!-- Subtle ZIP Archive Teeth -->
+    <g fill="#92400E" fill-opacity="0.52">
+      <rect x="74" y="81" width="10" height="6.4" rx="2"/>
+      <rect x="79" y="95" width="10" height="6.4" rx="2"/>
+      <rect x="74" y="109" width="10" height="6.4" rx="2"/>
+      <rect x="79" y="123" width="10" height="6.4" rx="2"/>
+    </g>
+    <!-- Forward Routing Arrow -->
+    <path d="M98 99.5 L135 99.5 L135 84 L167 107 L135 130 L135 114.5 L98 114.5 Z" fill="#FFFFFF"/>
+  </g>
+
+  <!-- Inbox Tray Side Walls -->
+  <path d="M40 148 L54 114 L66 114 L58 152 Z" fill="#BFDBFE" stroke="#BFDBFE" stroke-width="5" stroke-linejoin="round"/>
+  <path d="M198 152 L190 114 L202 114 L216 148 Z" fill="#BFDBFE" stroke="#BFDBFE" stroke-width="5" stroke-linejoin="round"/>
+
+  <!-- Foreground Inbox Tray with Classic Notch -->
+  <g filter="url(#softShadow)">
+    <path d="M58 142 L98 142 C101 142 103 145 105 149 C109 156 117 160 128 160 C139 160 147 156 151 149 C153 145 155 142 158 142 L198 142 C208 142 216 150 216 160 L216 192 C216 202 208 210 198 210 L58 210 C48 210 40 202 40 192 L40 160 C40 150 48 142 58 142 Z" fill="url(#trayGrad)"/>
+    <!-- Ready Status Accent Pill -->
+    <rect x="104" y="179" width="48" height="10" rx="5" fill="url(#pillGrad)"/>
+  </g>
+</svg>

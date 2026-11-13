@@ -199,8 +199,14 @@ pub const SHORTCUTS: &[ShortcutEntry] = &[
     ShortcutEntry {
         key_gui: "Ctrl+O",
         key_tui: "o",
-        action: "Open in File Manager",
+        action: "Open Transfer Folder",
         description: "Open the selected transfer folder in Windows Explorer / Linux file manager",
+    },
+    ShortcutEntry {
+        key_gui: "Open Buttons (Next to Browse)",
+        key_tui: "T / Z / F",
+        action: "Open Target / Processed / Receipt",
+        description: "Open the configured Target (T), Processed (Z), or Receipt (F) folder in the file manager",
     },
     ShortcutEntry {
         key_gui: "Ctrl+L",
