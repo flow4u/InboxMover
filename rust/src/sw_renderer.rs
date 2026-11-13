@@ -994,5 +994,62 @@ mod tests {
 
         let _ = std::fs::remove_dir_all(&temp_dir);
     }
+
+    #[test]
+    fn test_multiline_error_banner_wraps_without_overflow() {
+        let temp_dir = std::env::temp_dir().join("inbox_mover_sw_err_test");
+        let _ = std::fs::create_dir_all(&temp_dir);
+        let mut core = InboxMoverCore::with_base_dir(&temp_dir);
+        core.app_settings.show_welcome_splash = false;
+
+        let ctx = egui::Context::default();
+        let mut app = InboxMoverGuiApp::new_with_ctx(&ctx, core);
+        app.set_test_error(
+            "Processed 0 folder(s) with 1 error(s):\n• transfer-2026-11-13-14-20-stefan.vanaalst:\n  Failed to copy file \"Z:\\\\inbox\\\\transfer-2026-11-13-14-20-stefan.vanaalst\\\\inbox-mover-rust-gui.exe\" to \"C:\\\\Helper\\\\inbox-mover-rust-gui.exe\": The process cannot access the file because it is being used by another process. (os error 32)",
+        );
+
+        let mut rasterizer = SoftwareRasterizer::new();
+        for (w, h) in [(1240.0_f32, 800.0_f32), (920.0_f32, 620.0_f32)] {
+            for pass in 0..2 {
+                let mut raw = egui::RawInput::default();
+                raw.screen_rect = Some(Rect::from_min_size(Pos2::ZERO, egui::vec2(w, h)));
+                let out = ctx.run(raw, |ctx| {
+                    app.render_ui(ctx);
+                });
+                rasterizer.apply_textures_delta(&out.textures_delta);
+                let prims = ctx.tessellate(out.shapes, out.pixels_per_point);
+                for p in &prims {
+                    if let Primitive::Mesh(mesh) = &p.primitive {
+                        for v in &mesh.vertices {
+                            if p.clip_rect.contains(v.pos) {
+                                assert!(
+                                    v.pos.x <= w + 1.0,
+                                    "Error banner vertex overflowed right boundary ({w}): x={}",
+                                    v.pos.x
+                                );
+                            }
+                        }
+                    }
+                }
+                if pass == 1 && (w - 1240.0).abs() < 0.5 {
+                    if let Ok(ppm_path) = std::env::var("INBOX_MOVER_ERROR_PREVIEW_PPM") {
+                        let clear_color = ctx.style().visuals.panel_fill;
+                        rasterizer.render(&prims, out.pixels_per_point, 1240, 800, clear_color);
+                        let mut ppm = Vec::with_capacity(1240 * 800 * 3 + 64);
+                        ppm.extend_from_slice(b"P6\n1240 800\n255\n");
+                        for &px in &rasterizer.fb {
+                            let r = ((px >> 16) & 0xFF) as u8;
+                            let g = ((px >> 8) & 0xFF) as u8;
+                            let b = (px & 0xFF) as u8;
+                            ppm.extend_from_slice(&[r, g, b]);
+                        }
+                        let _ = std::fs::write(ppm_path, ppm);
+                    }
+                }
+            }
+        }
+
+        let _ = std::fs::remove_dir_all(&temp_dir);
+    }
 }
 

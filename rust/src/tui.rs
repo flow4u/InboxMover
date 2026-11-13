@@ -293,7 +293,7 @@ impl TuiApp {
                             return;
                         }
                     }
-                    errs.push(format!("{}: {}", folder.folder_name, e));
+                    errs.push(format!("• {}:\n  {}", folder.folder_name, e));
                 }
             }
         }
@@ -304,9 +304,9 @@ impl TuiApp {
             self.status_is_error = false;
         } else {
             self.status_message = format!(
-                "Processed {ok_count} folder(s); {} error(s): {}",
+                "Processed {ok_count} folder(s) with {} error(s):\n{}",
                 errs.len(),
-                errs.join(" | ")
+                errs.join("\n")
             );
             self.status_is_error = true;
         }
@@ -834,13 +834,24 @@ impl TuiApp {
         f.render_widget(Block::default().style(Style::default().bg(M3_BG)), area);
 
         let show_guide = self.core.app_settings.show_guidance;
+        let inner_w = area.width.saturating_sub(4).max(20) as usize;
+        let footer_height = if self.status_is_error || self.status_message.contains('\n') {
+            let wrapped_lines: usize = self
+                .status_message
+                .lines()
+                .map(|l| (l.chars().count().max(1) + inner_w - 1) / inner_w)
+                .sum();
+            (wrapped_lines.clamp(2, 6) + 3) as u16 // content lines + 1 shortcut row + 2 border rows
+        } else {
+            3
+        };
         let main_chunks = Layout::default()
             .direction(Direction::Vertical)
             .constraints([
                 Constraint::Length(3), // Top App Bar
                 Constraint::Length(if show_guide { 4 } else { 0 }), // Smart Context Banner
-                Constraint::Min(12),   // Body Split
-                Constraint::Length(3), // Footer Status & Shortcut Bar
+                Constraint::Min(10),   // Body Split
+                Constraint::Length(footer_height), // Footer Status & Shortcut Bar
             ])
             .split(area);
 
@@ -1251,20 +1262,62 @@ impl TuiApp {
         } else {
             M3_SUCCESS
         };
-        let footer = Paragraph::new(Line::from(vec![
-            Span::styled(" • ", Style::default().fg(status_col)),
-            Span::styled(&self.status_message, Style::default().fg(M3_ON_SURFACE)),
-            Span::raw("   |   "),
-            Span::styled(
-                "[Up/Down] Select  [Enter/p] Process  [s] Save  [t/z/f] Edit Paths  [?] Help  [q] Quit",
+        let shortcuts_hint =
+            " [Up/Down] Select  [Enter/p] Process  [s] Save  [t/z/f] Edit Paths  [T/Z/F] Open Paths  [?] Help  [q] Quit";
+        let footer = if self.status_is_error || self.status_message.contains('\n') {
+            let mut footer_lines: Vec<Line> = Vec::new();
+            for (idx, line_str) in self.status_message.lines().enumerate() {
+                if idx == 0 {
+                    footer_lines.push(Line::from(vec![
+                        Span::styled(
+                            if self.status_is_error { " ⚠ " } else { " • " },
+                            Style::default().fg(status_col).add_modifier(Modifier::BOLD),
+                        ),
+                        Span::styled(
+                            line_str,
+                            Style::default().fg(if self.status_is_error {
+                                M3_ERROR
+                            } else {
+                                M3_ON_SURFACE
+                            }),
+                        ),
+                    ]));
+                } else {
+                    footer_lines.push(Line::from(Span::styled(
+                        format!("   {line_str}"),
+                        Style::default().fg(M3_ON_SURFACE),
+                    )));
+                }
+            }
+            footer_lines.push(Line::from(Span::styled(
+                shortcuts_hint,
                 Style::default().fg(M3_MUTED),
-            ),
-        ]))
-        .block(
-            Block::default()
-                .borders(Borders::ALL)
-                .style(Style::default().bg(M3_SURFACE)),
-        );
+            )));
+            Paragraph::new(footer_lines)
+                .wrap(Wrap { trim: false })
+                .block(
+                    Block::default()
+                        .borders(Borders::ALL)
+                        .border_style(Style::default().fg(if self.status_is_error {
+                            M3_ERROR
+                        } else {
+                            M3_MUTED
+                        }))
+                        .style(Style::default().bg(M3_SURFACE)),
+                )
+        } else {
+            Paragraph::new(Line::from(vec![
+                Span::styled(" • ", Style::default().fg(status_col)),
+                Span::styled(&self.status_message, Style::default().fg(M3_ON_SURFACE)),
+                Span::raw("   |  "),
+                Span::styled(shortcuts_hint, Style::default().fg(M3_MUTED)),
+            ]))
+            .block(
+                Block::default()
+                    .borders(Borders::ALL)
+                    .style(Style::default().bg(M3_SURFACE)),
+            )
+        };
         f.render_widget(footer, main_chunks[3]);
 
         // 5. Render Modal Overlays if active

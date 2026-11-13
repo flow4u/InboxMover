@@ -241,6 +241,12 @@ impl InboxMoverGuiApp {
         }
     }
 
+    #[cfg(test)]
+    pub fn set_test_error(&mut self, msg: impl Into<String>) {
+        self.status_message = msg.into();
+        self.status_is_error = true;
+    }
+
     fn open_configured_folder(&mut self, label: &str, raw_path: &str) {
         let trimmed = raw_path.trim();
         if trimmed.is_empty() {
@@ -461,7 +467,7 @@ impl InboxMoverGuiApp {
                             return;
                         }
                     }
-                    error_messages.push(format!("{}: {}", folder.folder_name, e));
+                    error_messages.push(format!("• {}:\n  {}", folder.folder_name, e));
                 }
             }
         }
@@ -476,9 +482,9 @@ impl InboxMoverGuiApp {
             self.status_is_error = false;
         } else {
             self.status_message = format!(
-                "Processed {processed_count} folder(s) with {} error(s): {}",
+                "Processed {processed_count} folder(s) with {} error(s):\n{}",
                 error_messages.len(),
-                error_messages.join(" | ")
+                error_messages.join("\n")
             );
             self.status_is_error = true;
         }
@@ -814,49 +820,141 @@ impl InboxMoverGuiApp {
                     .stroke(Stroke::new(1.0_f32, p.outline_variant)),
             )
             .show(ctx, |ui| {
-                let status_color = if self.status_is_error {
-                    p.error
-                } else {
-                    p.success
-                };
                 let shortcuts_str =
                     "Shortcuts: [Up/Down] Select  [Enter] Process  [Ctrl+S] Save Rule  [Del] Delete  [F5] Refresh  [F1] Help";
 
-                if ui.available_width() >= 860.0 * font_scale {
-                    ui.horizontal(|ui| {
-                        let (dot_rect, _) =
-                            ui.allocate_exact_size(Vec2::splat(10.0), Sense::hover());
-                        ui.painter()
-                            .circle_filled(dot_rect.center(), 4.5, status_color);
+                if self.status_is_error {
+                    let mut dismiss_error = false;
+                    let mut copy_error = false;
+
+                    egui::Frame::none()
+                        .fill(p.error_container)
+                        .rounding(Rounding::same(8.0))
+                        .inner_margin(Margin::symmetric(12.0, 8.0))
+                        .stroke(Stroke::new(1.0_f32, p.error))
+                        .show(ui, |ui| {
+                            let full_w = ui.available_width();
+                            ui.set_min_width(full_w);
+
+                            ui.horizontal(|ui| {
+                                ui.label(
+                                    RichText::new("⚠ Error")
+                                        .strong()
+                                        .color(p.error),
+                                );
+                                ui.with_layout(
+                                    egui::Layout::right_to_left(egui::Align::Center),
+                                    |ui| {
+                                        if ui
+                                            .small_button("✖ Dismiss")
+                                            .on_hover_text("Clear this error message")
+                                            .clicked()
+                                        {
+                                            dismiss_error = true;
+                                        }
+                                        if ui
+                                            .small_button("📋 Copy")
+                                            .on_hover_text("Copy full error message to clipboard")
+                                            .clicked()
+                                        {
+                                            copy_error = true;
+                                        }
+                                    },
+                                );
+                            });
+
+                            ui.add_space(4.0);
+
+                            egui::ScrollArea::vertical()
+                                .id_salt("bottom_error_status_scroll")
+                                .max_height(130.0 * font_scale)
+                                .auto_shrink([false, true])
+                                .show(ui, |ui| {
+                                    ui.set_max_width(ui.available_width());
+                                    ui.style_mut().interaction.selectable_labels = true;
+                                    ui.add(
+                                        egui::Label::new(
+                                            RichText::new(&self.status_message)
+                                                .color(p.on_error_container),
+                                        )
+                                        .wrap(),
+                                    );
+                                });
+                        });
+
+                    if copy_error {
+                        ctx.copy_text(self.status_message.clone());
+                    }
+                    if dismiss_error {
+                        self.status_is_error = false;
+                        self.status_message = "Ready.".to_string();
+                    }
+
+                    ui.add_space(4.0);
+                    ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                         ui.add(
                             egui::Label::new(
-                                RichText::new(&self.status_message).color(p.on_surface),
+                                RichText::new(shortcuts_str)
+                                    .small()
+                                    .color(p.on_surface_variant),
                             )
-                            .truncate(),
+                            .wrap(),
                         );
-
+                    });
+                } else {
+                    let is_multiline_or_long =
+                        self.status_message.contains('\n') || self.status_message.chars().count() > 85;
+                    if !is_multiline_or_long && ui.available_width() >= 900.0 * font_scale {
                         ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
                             ui.label(
                                 RichText::new(shortcuts_str)
                                     .small()
                                     .color(p.on_surface_variant),
                             );
+                            ui.add_space(12.0);
+                            let rem_w = ui.available_width().max(120.0);
+                            ui.allocate_ui_with_layout(
+                                Vec2::new(rem_w, ui.spacing().interact_size.y),
+                                egui::Layout::left_to_right(egui::Align::Center),
+                                |ui| {
+                                    let (dot_rect, _) =
+                                        ui.allocate_exact_size(Vec2::splat(10.0), Sense::hover());
+                                    ui.painter()
+                                        .circle_filled(dot_rect.center(), 4.5, p.success);
+                                    ui.add(
+                                        egui::Label::new(
+                                            RichText::new(&self.status_message).color(p.on_surface),
+                                        )
+                                        .wrap(),
+                                    );
+                                },
+                            );
                         });
-                    });
-                } else {
-                    ui.horizontal_wrapped(|ui| {
-                        let (dot_rect, _) =
-                            ui.allocate_exact_size(Vec2::splat(10.0), Sense::hover());
-                        ui.painter()
-                            .circle_filled(dot_rect.center(), 4.5, status_color);
-                        ui.label(RichText::new(&self.status_message).color(p.on_surface));
-                        ui.separator();
-                        ui.label(
-                            RichText::new(shortcuts_str)
-                                .small()
-                                .color(p.on_surface_variant),
-                        );
-                    });
+                    } else {
+                        ui.horizontal_top(|ui| {
+                            let (dot_rect, _) =
+                                ui.allocate_exact_size(Vec2::new(10.0, 16.0), Sense::hover());
+                            ui.painter()
+                                .circle_filled(dot_rect.center(), 4.5, p.success);
+                            ui.add(
+                                egui::Label::new(
+                                    RichText::new(&self.status_message).color(p.on_surface),
+                                )
+                                .wrap(),
+                            );
+                        });
+                        ui.add_space(2.0);
+                        ui.with_layout(egui::Layout::right_to_left(egui::Align::Center), |ui| {
+                            ui.add(
+                                egui::Label::new(
+                                    RichText::new(shortcuts_str)
+                                        .small()
+                                        .color(p.on_surface_variant),
+                                )
+                                .wrap(),
+                            );
+                        });
+                    }
                 }
             });
 

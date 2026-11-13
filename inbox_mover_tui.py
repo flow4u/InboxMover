@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Inbox Mover TUI v0.21.3
+Inbox Mover TUI v0.21.4
 A TUI conversion of the Inbox Mover utility.
 Runs on standard Python libraries (uses curses for the interface).
 
@@ -23,7 +23,7 @@ import fnmatch
 import curses
 import textwrap
 
-VERSION = "0.21.3 (TUI)"
+VERSION = "0.21.4 (TUI)"
 
 # --------------------------------------------------------------------------- #
 # CORE LOGIC (Preserved from original)
@@ -451,12 +451,15 @@ class InboxMoverTUI:
     def show_message(self, title, msg, color=0):
         self.stdscr.clear()
         h, w = self.stdscr.getmaxyx()
-        self.stdscr.addstr(max(0, h//2 - 2), max(0, (w - len(title))//2), title, curses.A_BOLD | curses.color_pair(color))
-        wrapped = textwrap.wrap(msg, width=max(10, w-10))
+        self.stdscr.addstr(max(0, h//2 - 3), max(0, (w - len(title))//2), title, curses.A_BOLD | curses.color_pair(color))
+        wrapped = []
+        for raw_line in str(msg).splitlines() or [""]:
+            wrapped.extend(textwrap.wrap(raw_line, width=max(10, w-10)) or [""])
+        start_y = max(2, h//2 - len(wrapped)//2)
         for i, line in enumerate(wrapped):
-            if h//2 + i < h - 1:
-                self.stdscr.addstr(h//2 + i, max(0, (w - len(line))//2), line)
-        self.stdscr.addstr(min(h-1, h//2 + len(wrapped) + 2), max(0, (w - 18)//2), "Press any key...", curses.A_DIM)
+            if start_y + i < h - 2:
+                self.stdscr.addstr(start_y + i, max(0, (w - len(line))//2), line)
+        self.stdscr.addstr(min(h-1, start_y + len(wrapped) + 2), max(0, (w - 18)//2), "Press any key...", curses.A_DIM)
         self.stdscr.getch()
 
     def handle_settings(self):

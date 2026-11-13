@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Inbox Mover v0.21.3
+Inbox Mover v0.21.4
 A utility to process and extract zip files containing a receipt*.json or manifest*.json,
 with both a Material-inspired GUI and a CLI mode.
 Runs entirely on standard Python libraries.
@@ -24,7 +24,7 @@ import webbrowser
 import tkinter as tk
 from tkinter import ttk, filedialog, messagebox, simpledialog
 
-VERSION = "0.21.3"
+VERSION = "0.21.4"
 UI_FONT = "Segoe UI" if sys.platform == "win32" else "DejaVu Sans"
 MONO_FONT = "Consolas" if sys.platform == "win32" else "DejaVu Sans Mono"
 
